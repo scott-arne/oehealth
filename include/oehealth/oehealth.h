@@ -1,0 +1,24 @@
+#ifndef OEHEALTH_H
+#define OEHEALTH_H
+
+// Version information
+#define OEHEALTH_VERSION_MAJOR 0
+#define OEHEALTH_VERSION_MINOR 1
+#define OEHEALTH_VERSION_PATCH 0
+
+#include <oechem.h>
+
+namespace OEHEALTH {
+
+/// \brief Calculate the molecular weight of a molecule.
+///
+/// Passes the molecule natively from Python to C++ via SWIG typemaps,
+/// then delegates to OEChem's OECalculateMolecularWeight.
+///
+/// \param mol Reference to an OEMolBase object.
+/// \returns Molecular weight in Daltons.
+double calculate_molecular_weight(const OEChem::OEMolBase& mol);
+
+} // namespace OEHEALTH
+
+#endif // OEHEALTH_H

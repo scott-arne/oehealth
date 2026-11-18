@@ -1,0 +1,41 @@
+[[locations]]
+file = "pyproject.toml"
+type = "pyproject-version"
+
+[[locations]]
+file = "python/pyproject.toml"
+type = "pyproject-version"
+
+[[locations]]
+file = "python/oehealth/__init__.py"
+type = "python-dunder"
+
+[[locations]]
+file = "python/oehealth/__init__.py"
+type = "python-version-info"
+
+[[locations]]
+file = "CMakeLists.txt"
+type = "cmake-project"
+
+[[locations]]
+file = "include/oehealth/oehealth.h"
+type = "c-define"
+prefix = "OEHEALTH"
+
+[[locations]]
+file = "swig/oehealth.i"
+type = "c-define"
+prefix = "OEHEALTH"
+
+[[locations]]
+file = "tests/python/test_oehealth.py"
+type = "custom"
+template = 'oehealth\.__version__ == "{version}"'
+label = "test-version-string"
+
+[[locations]]
+file = "tests/python/test_oehealth.py"
+type = "custom"
+template = 'oehealth\.__version_info__ == \({info_tuple}\)'
+label = "test-version-info"
