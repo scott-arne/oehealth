@@ -9,6 +9,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(googletest)
 
 add_executable(oehealth_tests
+    test_assessments_geometry.cpp
     test_context.cpp
     test_oehealth.cpp
     test_reference_data.cpp

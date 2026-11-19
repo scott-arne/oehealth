@@ -61,6 +61,9 @@ FetchContent_MakeAvailable(nlohmann_json)
 # Library
 set(OEHEALTH_SOURCES
     src/assessment.cpp
+    src/assessments/bond_angles.cpp
+    src/assessments/bond_lengths.cpp
+    src/assessments/geometry_outliers.cpp
     src/common.cpp
     src/context.cpp
     src/data/engh_huber_2001.cpp
