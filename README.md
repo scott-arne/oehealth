@@ -30,16 +30,17 @@ installation (the directory containing `include/` and `lib/`):
 export OPENEYE_ROOT=/path/to/openeye/sdk
 ```
 
-The CMake presets read this variable automatically. You can also set
-`Python3_EXECUTABLE` if you need a specific Python interpreter.
+CMake reads this variable when it configures the build. Pass
+`-DPython3_EXECUTABLE=/path/to/python` if you need a specific Python
+interpreter.
 
-Alternatively, create a `CMakeUserPresets.json` (gitignored) to override
-these values permanently for your local machine.
+To keep these settings for your machine, put them in a
+`CMakeUserPresets.json`, which git ignores.
 
 ### 2. Build the C++ Library and SWIG Bindings
 
 ```bash
-cmake --preset debug
+cmake -S . -B build-debug -DCMAKE_BUILD_TYPE=Debug
 cmake --build build-debug
 ```
 
@@ -49,7 +50,7 @@ compiled Python extension module in `python/oehealth/`.
 To build in release mode:
 
 ```bash
-cmake --preset release
+cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release
 cmake --build build-release
 ```
 
@@ -69,7 +70,7 @@ extension modules. The compat mode installs the package as a traditional
 
 ### 4. Run Tests
 
-C++ tests (built automatically with the debug preset):
+C++ tests (built by default; `-DOEHEALTH_BUILD_TESTS=OFF` skips them):
 
 ```bash
 cd build-debug && ctest --output-on-failure
@@ -157,7 +158,6 @@ SWIG typemaps. No SMILES round-trip or manual pointer handling is needed.
 ```
 oehealth/
     CMakeLists.txt                  # Build configuration
-    CMakePresets.json               # CMake presets (copy to CMakeUserPresets.json)
     pyproject.toml                  # Package metadata + [tool.oe-build] config
     vrzn.toml                       # Version locations for vrzn
     include/oehealth/
@@ -264,7 +264,7 @@ Options:
 ```
 
 If `--openeye-root` is not provided, the script checks the `OPENEYE_ROOT`
-environment variable and then `CMakePresets.json` / `CMakeUserPresets.json`.
+environment variable and then a `CMakeUserPresets.json`, if present.
 
 ### CI Builds
 
