@@ -33,14 +33,12 @@ AssessmentResult assess_geometry_terms(const OEChem::OEMolBase& mol,
         sum_z2 += z * z;
         max_abs_z = std::max(max_abs_z, abs_z);
 
-        Severity severity = Severity::INFO;
-        if (meets_threshold(abs_z, settings.error_z)) {
-            severity = Severity::ERROR;
-        } else if (meets_threshold(abs_z, settings.warning_z)) {
-            severity = Severity::WARNING;
-        } else {
+        if (!meets_threshold(abs_z, settings.warning_z)) {
             continue;
         }
+        // validate_thresholds guarantees error_z >= warning_z, so an error implies a warning.
+        const Severity severity =
+            meets_threshold(abs_z, settings.error_z) ? Severity::ERROR : Severity::WARNING;
 
         Finding finding;
         finding.code = settings.code;

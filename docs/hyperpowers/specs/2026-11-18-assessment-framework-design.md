@@ -146,6 +146,15 @@ Out of scope for this round:
   Every new assessment with an options struct adds its own
   `OEHEALTH_RETURN_COPY` line. Rejected: returning references (a reference
   into a collected temporary dangles and crashes).
+- **Peptide-link variants follow MolProbity's Dangle.** Engh & Huber
+  (2001) does not say which residue owns the GLY and PRO peptide-link
+  rows. Dangle's parameter table (`EnghHuber_IntlTblsF_1999.txt` in
+  `rlabduke/javadev`) resolves this against the 1991 paper: the C–N bond
+  and the C–N–CA angle key on the residue that owns N; CA–C–N keys on GLY
+  in residue i first, then PRO in residue j; O–C–N keys on PRO in residue
+  j first, then GLY in residue i. oehealth uses the same rules. Rejected:
+  PRO precedence for both CA–C–N and O–C–N in a Gly–Pro pair (the first
+  design, which differs from the reference implementation for CA–C–N).
 
 ## Architecture
 
@@ -449,19 +458,20 @@ Peptide-link terms, for each residue i with peptide successor j:
 
 - Bond C(i)–N(j); angles CA(i)–C(i)–N(j), O(i)–C(i)–N(j), C(i)–N(j)–CA(j);
   and, when j is PRO, C(i)–N(j)–CD(j).
-- Variant selection (by `LinkVariant`, see Reference data): if j is PRO,
-  use `PRO` for the C(i)–N(j) bond, CA(i)–C(i)–N(j), and O(i)–C(i)–N(j),
-  and `PRO_CIS` or `PRO_TRANS` by ω (as above) for C(i)–N(j)–CA(j) and
-  C(i)–N(j)–CD(j); `PRO_ALL` is not used. Otherwise, if the residue that
-  owns the varying atom is GLY, use `GLY`: residue i for CA(i)–C(i)–N(j)
-  and O(i)–C(i)–N(j), residue j for C(i)–N(j)–CA(j) and for the C(i)–N(j)
-  bond. Otherwise use `DEFAULT`.
+- Variant selection (by `LinkVariant`, see Reference data):
+  - C(i)–N(j) bond: `PRO` if j is PRO, else `GLY` if j is GLY, else
+    `DEFAULT`.
+  - CA(i)–C(i)–N(j): `GLY` if i is GLY, else `PRO` if j is PRO, else
+    `DEFAULT`.
+  - O(i)–C(i)–N(j): `PRO` if j is PRO, else `GLY` if i is GLY, else
+    `DEFAULT`.
+  - C(i)–N(j)–CA(j) and C(i)–N(j)–CD(j): if j is PRO, `PRO_CIS` or
+    `PRO_TRANS` by ω (as above); otherwise `GLY` if j is GLY, else
+    `DEFAULT` (CD exists only for PRO). `PRO_ALL` is not used.
 - C(i)–N(j)–CD(j) is assessed only here, once per PRO that has a peptide
   predecessor; a PRO without one has no C–N–CD term.
-- Assumption: the GLY row for the C–N bond is keyed on residue j, validate
-  via comparison with the Engh & Huber (2001) table text. The C–N GLY and
-  default targets differ by 0.010 Å (about half a sigma), so a wrong choice
-  shifts Z without creating outliers on ordinary structures.
+- These rules follow MolProbity's Dangle (see the Decisions entry on
+  peptide-link variants).
 
 Disulfide terms: for each pair of CYS residues whose SG atoms are within
 2.5 Å, the SG–SG bond from the link table. This is a bond term only.

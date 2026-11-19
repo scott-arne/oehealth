@@ -39,6 +39,22 @@ const geometry::GeometryTerm* find_term(const std::vector<geometry::GeometryTerm
     return nullptr;
 }
 
+// Count three-atom terms named first-center-last, where the first two atoms belong to the same
+// residue as each other and the last to the next residue (CA-C-N, O-C-N) or the reverse (C-N-CA).
+std::size_t count_angle_family(const std::vector<geometry::GeometryTerm>& terms,
+                               const std::string& first, const std::string& center,
+                               const std::string& last) {
+    std::size_t count = 0;
+    for (const auto& term : terms) {
+        if (term.atoms.size() == 3 && trimmed(term.atoms[0]->GetName()) == first &&
+            trimmed(term.atoms[1]->GetName()) == center &&
+            trimmed(term.atoms[2]->GetName()) == last) {
+            ++count;
+        }
+    }
+    return count;
+}
+
 std::size_t count_c_n_cd_terms(const std::vector<geometry::GeometryTerm>& terms) {
     std::size_t count = 0;
     for (const auto& term : terms) {
@@ -162,9 +178,9 @@ TEST(Targets, HistidineWithoutHydrogensUsesBestFit) {
     OEChem::OEGraphMol mol;
     add_ideal_histidine(mol);
     const StructureContext ctx(mol);
-    const std::string expected = geometry::lowest_rmsz_his_variant(
-        geometry::his_variant_rmsz(ctx, 0, "HISE"), geometry::his_variant_rmsz(ctx, 0, "HISD"),
-        geometry::his_variant_rmsz(ctx, 0, "HISH"));
+    // RMSZ of the ideal coordinates against each variant's 14 ring rows, computed independently
+    // in Python from the table: HISE 1.2989, HISD 1.2833, HISH 1.9774, so HISD wins narrowly.
+    const std::string expected = "HISD";
     EXPECT_EQ(geometry::residue_variant(ctx, 0), expected);
     EXPECT_LT(geometry::his_variant_rmsz(ctx, 0, "HISE"), std::numeric_limits<double>::infinity());
 
@@ -193,6 +209,11 @@ TEST(Targets, CrambinLinkTerms) {
     EXPECT_EQ(peptide_bonds, 45U);
     EXPECT_EQ(disulfides, 3U);
     EXPECT_EQ(count_c_n_cd_terms(angles), 5U);
+    // Each link-angle family is emitted once per peptide link. The residue-internal CA-C-N-like
+    // names cannot collide: no residue-internal angle runs CA-C-N, O-C-N or C-N-CA.
+    EXPECT_EQ(count_angle_family(angles, "CA", "C", "N"), peptide_bonds);
+    EXPECT_EQ(count_angle_family(angles, "O", "C", "N"), peptide_bonds);
+    EXPECT_EQ(count_angle_family(angles, "C", "N", "CA"), peptide_bonds);
 
     // C(4)-N(5): residue j is PRO.
     const auto* cys_pro = find_term(bonds, {find_atom(mol, 4, "C"), find_atom(mol, 5, "N")});
@@ -214,6 +235,85 @@ TEST(Targets, CrambinLinkTerms) {
         angles, {find_atom(mol, 20, "C"), find_atom(mol, 21, "N"), find_atom(mol, 21, "CA")});
     ASSERT_NE(default_angle, nullptr);
     EXPECT_EQ(default_angle->variant, "DEFAULT");
+}
+
+TEST(Targets, GlyProLinkAnglesFollowDangle) {
+    OEChem::OEGraphMol mol;
+    read_crambin(mol);
+    // Crambin has no Gly-Pro pair, so relabel residue 38 (ALA, after GLY 37) as PRO.
+    for (OESystem::OEIter<OEChem::OEAtomBase> atom = mol.GetAtoms(); atom; ++atom) {
+        OEChem::OEResidue residue = OEChem::OEAtomGetResidue(atom);
+        if (residue.GetResidueNumber() == 38) {
+            residue.SetName("PRO");
+            OEChem::OEAtomSetResidue(atom, residue);
+        }
+    }
+    const StructureContext ctx(mol);
+    const auto angles = geometry::collect_angle_terms(ctx);
+
+    // CA-C-N prefers GLY in residue i over PRO in residue j.
+    const auto* ca_c_n = find_term(
+        angles, {find_atom(mol, 37, "CA"), find_atom(mol, 37, "C"), find_atom(mol, 38, "N")});
+    ASSERT_NE(ca_c_n, nullptr);
+    EXPECT_EQ(ca_c_n->variant, "GLY");
+    EXPECT_DOUBLE_EQ(ca_c_n->ideal, 116.2);
+    // O-C-N prefers PRO in residue j over GLY in residue i.
+    const auto* o_c_n = find_term(
+        angles, {find_atom(mol, 37, "O"), find_atom(mol, 37, "C"), find_atom(mol, 38, "N")});
+    ASSERT_NE(o_c_n, nullptr);
+    EXPECT_EQ(o_c_n->variant, "PRO");
+    EXPECT_DOUBLE_EQ(o_c_n->ideal, 121.1);
+}
+
+TEST(Targets, VariantRowsBecomeTerms) {
+    OEChem::OEGraphMol mol;
+    read_crambin(mol);
+    const StructureContext ctx(mol);
+    const auto bonds = geometry::collect_bond_terms(ctx);
+    const auto angles = geometry::collect_angle_terms(ctx);
+
+    const auto* ss = find_term(bonds, {find_atom(mol, 3, "CB"), find_atom(mol, 3, "SG")});
+    ASSERT_NE(ss, nullptr);
+    EXPECT_EQ(ss->variant, "SS");
+    EXPECT_DOUBLE_EQ(ss->ideal, 1.818);
+
+    const auto* n_cd = find_term(bonds, {find_atom(mol, 5, "N"), find_atom(mol, 5, "CD")});
+    ASSERT_NE(n_cd, nullptr);
+    EXPECT_EQ(n_cd->variant, "trans");
+    EXPECT_DOUBLE_EQ(n_cd->ideal, 1.474);
+
+    const auto* c_n_cd = find_term(
+        angles, {find_atom(mol, 4, "C"), find_atom(mol, 5, "N"), find_atom(mol, 5, "CD")});
+    ASSERT_NE(c_n_cd, nullptr);
+    EXPECT_EQ(c_n_cd->variant, "PRO_TRANS");
+    EXPECT_DOUBLE_EQ(c_n_cd->ideal, 128.4);
+    const auto* c_n_ca = find_term(
+        angles, {find_atom(mol, 4, "C"), find_atom(mol, 5, "N"), find_atom(mol, 5, "CA")});
+    ASSERT_NE(c_n_ca, nullptr);
+    EXPECT_EQ(c_n_ca->variant, "PRO_TRANS");
+    EXPECT_DOUBLE_EQ(c_n_ca->ideal, 119.3);
+}
+
+TEST(Targets, FreeCysteineBondTermIsSH) {
+    OEChem::OEGraphMol mol;
+    read_crambin(mol);
+    mol.DeleteAtom(find_atom(mol, 40, "SG"));
+    const StructureContext ctx(mol);
+    const auto bonds = geometry::collect_bond_terms(ctx);
+    const auto* sh = find_term(bonds, {find_atom(mol, 3, "CB"), find_atom(mol, 3, "SG")});
+    ASSERT_NE(sh, nullptr);
+    EXPECT_EQ(sh->variant, "SH");
+    EXPECT_DOUBLE_EQ(sh->ideal, 1.812);
+}
+
+TEST(Measure, TorsionOfPlanarTransIsPositive180) {
+    // This zigzag made atan2 return -180.0 (y == -0.0, x < 0) before the result was normalized.
+    OEChem::OEGraphMol mol;
+    const auto* a = add_atom(mol, OEChem::OEElemNo::C, "C1", "UNK", 1, 1.0, 1.0, 0.0);
+    const auto* b = add_atom(mol, OEChem::OEElemNo::C, "C2", "UNK", 1, 0.0, 0.0, 0.0);
+    const auto* c = add_atom(mol, OEChem::OEElemNo::C, "C3", "UNK", 1, 1.5, 0.0, 0.0);
+    const auto* d = add_atom(mol, OEChem::OEElemNo::C, "C4", "UNK", 1, 2.5, -1.0, 0.0);
+    EXPECT_EQ(geometry::torsion_degrees(mol, a, b, c, d), 180.0);
 }
 
 TEST(Targets, ProlineWithoutPredecessorHasNoCNCDTerm) {

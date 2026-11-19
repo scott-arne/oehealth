@@ -119,7 +119,7 @@ void add_link_bond(const StructureContext& ctx, std::size_t i, std::size_t j,
                    std::vector<GeometryTerm>& terms) {
     const ResidueInfo& first = ctx.GetResidues()[i];
     const ResidueInfo& second = ctx.GetResidues()[j];
-    // Assumption from the design: the GLY C-N row is keyed on residue j.
+    // MolProbity's Dangle keys the C-N row on the residue that owns N (residue j).
     LinkVariant variant = LinkVariant::DEFAULT;
     if (is_residue(second, "PRO")) {
         variant = LinkVariant::PRO;
@@ -138,14 +138,23 @@ void add_link_angles(const StructureContext& ctx, std::size_t i, std::size_t j,
     const ResidueInfo& second = ctx.GetResidues()[j];
     const bool second_is_pro = is_residue(second, "PRO");
 
-    // CA(i)-C(i)-N(j) and O(i)-C(i)-N(j): the varying atom belongs to residue i.
-    LinkVariant before = LinkVariant::DEFAULT;
-    if (second_is_pro) {
-        before = LinkVariant::PRO;
-    } else if (is_residue(first, "GLY")) {
-        before = LinkVariant::GLY;
+    // CA(i)-C(i)-N(j) and O(i)-C(i)-N(j). MolProbity's Dangle ranks the variants differently
+    // for the two angles, which decides a Gly-Pro pair: CA-C-N prefers GLY (residue i) over
+    // PRO (residue j), and O-C-N prefers PRO over GLY.
+    LinkVariant ca_c_n = LinkVariant::DEFAULT;
+    if (is_residue(first, "GLY")) {
+        ca_c_n = LinkVariant::GLY;
+    } else if (second_is_pro) {
+        ca_c_n = LinkVariant::PRO;
     }
-    for (const char* atom : {"CA", "O"}) {
+    LinkVariant o_c_n = LinkVariant::DEFAULT;
+    if (second_is_pro) {
+        o_c_n = LinkVariant::PRO;
+    } else if (is_residue(first, "GLY")) {
+        o_c_n = LinkVariant::GLY;
+    }
+    for (const auto& [atom, before] : {std::pair<const char*, LinkVariant>{"CA", ca_c_n},
+                                       std::pair<const char*, LinkVariant>{"O", o_c_n}}) {
         if (const data::LinkAngle* row = find_link_angle(atom, "C", "N", before)) {
             add_term(terms, {first.FindAtom(atom), first.FindAtom("C"), second.FindAtom("N")},
                      row->ideal, row->sigma, link_variant_name(before));

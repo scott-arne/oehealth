@@ -4,7 +4,9 @@
 #include "oehealth/assessments/bond_lengths.h"
 #include "test_helpers.h"
 
+#include <array>
 #include <cmath>
+#include <cstdio>
 #include <limits>
 #include <stdexcept>
 #include <string>
@@ -214,6 +216,12 @@ TEST(BondAngleAssessment, DistortedAngleIsTheOnlyNewOutlier) {
     EXPECT_EQ(finding.atoms[1].atom_name, "CB");
     EXPECT_EQ(finding.atoms[2].atom_name, "OG");
     EXPECT_NEAR(finding.deviation, 6.0, 1e-3);
+    EXPECT_NEAR(finding.expected, SER_CA_CB_OG, 1e-12);
+    EXPECT_EQ(finding.message.rfind("A SER 11 CA-CB-OG", 0), 0U) << finding.message;
+    // Angles are reported in degrees with one decimal.
+    std::array<char, 32> ideal{};
+    std::snprintf(ideal.data(), ideal.size(), " deg (ideal %.1f, Z ", SER_CA_CB_OG);
+    EXPECT_NE(finding.message.find(ideal.data()), std::string::npos) << finding.message;
     EXPECT_EQ(metric(after, "n_outliers"), metric(before, "n_outliers") + 1.0);
 }
 

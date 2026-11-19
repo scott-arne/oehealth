@@ -53,7 +53,9 @@ double torsion_degrees(const OEChem::OEMolBase& mol, const OEChem::OEAtomBase* a
     const Vec3 b3 = subtract(coordinates(mol, d), pc);
     const double y = norm(b2) * dot(b1, cross(b2, b3));
     const double x = dot(cross(b1, b2), cross(b2, b3));
-    return std::atan2(y, x) * RADIANS_TO_DEGREES;
+    const double degrees = std::atan2(y, x) * RADIANS_TO_DEGREES;
+    // atan2 returns -pi for y == -0.0 and x < 0 (planar trans); the range is (-180, 180].
+    return degrees <= -180.0 ? 180.0 : degrees;
 }
 
 std::optional<std::size_t> peptide_successor(const StructureContext& ctx, std::size_t i) {
