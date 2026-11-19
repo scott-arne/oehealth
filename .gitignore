@@ -198,7 +198,6 @@ CMakeUserPresets.json
 docs/plans/
 docs/specs/
 docs/superpowers/
-docs/hyperpowers/
 
 # Caches
 .pyre/
