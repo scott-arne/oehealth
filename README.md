@@ -6,6 +6,10 @@ This project provides a C++ library with Python bindings built using SWIG and
 [OpenEye Toolkits](https://www.eyesopen.com/). Molecules created with
 `openeye.oechem` in Python pass natively to C++ without serialization.
 
+The first assessments check protein structures: bond lengths and bond angles
+against Engh & Huber (2001) targets, atom clashes, valence, and Ramachandran
+outliers. Assessments combine into suites, and every result serializes to JSON.
+
 ## Prerequisites
 
 - **OpenEye C++ SDK** -- Headers and libraries (download from
@@ -77,21 +81,56 @@ Python tests:
 pytest tests/python/ -v
 ```
 
-The Python tests verify that molecules created with `openeye.oechem.OEGraphMol`
-pass correctly to the C++ `calculate_molecular_weight` function.
+Without an editable install, put the package on the path instead:
+`PYTHONPATH=python pytest tests/python/ -v`. The Python tests run each
+assessment on crambin (PDB entry 1CRN, `tests/data/1crn.pdb`) through the
+bindings, and test the reference-table generator.
+
+Lint and format checks (clang-tidy needs the build's `compile_commands.json`;
+on macOS also pass `--extra-arg=-isysroot --extra-arg="$(xcrun --show-sdk-path)"`):
+
+```bash
+clang-format --dry-run --Werror include/oehealth/*.h src/*.cpp
+clang-tidy -p build-debug src/*.cpp
+ruff check .
+mypy
+```
 
 ## Usage
 
 ```python
 from openeye import oechem
-from oehealth import calculate_molecular_weight
+import oehealth
 
 mol = oechem.OEGraphMol()
-oechem.OESmilesToMol(mol, "CC(=O)OC1=CC=CC=C1C(=O)O")  # aspirin
+oechem.OEReadMolecule(oechem.oemolistream("tests/data/1crn.pdb"), mol)
 
-mw = calculate_molecular_weight(mol)
-print(f"Molecular weight: {mw:.2f}")  # 180.16
+result = oehealth.make_protein_geometry_suite().Run(mol)
+for child in result.children:
+    print(child.assessment, [(m.name, m.value) for m in child.metrics])
+    for finding in child.findings:
+        print("   ", finding.message)
+
+report = result.to_dict()  # the same content as oehealth.to_json(result)
 ```
+
+The same in C++:
+
+```cpp
+#include "oehealth/oehealth.h"
+
+OEChem::OEGraphMol mol;
+OEChem::oemolistream stream("tests/data/1crn.pdb");
+OEChem::OEReadMolecule(stream, mol);
+const OEHEALTH::AssessmentResult result = OEHEALTH::make_protein_geometry_suite()->Run(mol);
+std::cout << OEHEALTH::to_json(result) << std::endl;
+```
+
+Each assessment can also run on its own, for example
+`oehealth.ClashAssessment().Run(mol)`, and takes an options struct where it has
+thresholds (`BondLengthOptions`, `BondAngleOptions`, `ClashOptions`).
+Molecules are assessed as given: nothing is added or changed. The valence check
+needs implicit hydrogen counts, which OpenEye's readers assign by default.
 
 The `OEGraphMol` object passes directly from Python to C++ via cross-runtime
 SWIG typemaps. No SMILES round-trip or manual pointer handling is needed.
@@ -105,9 +144,14 @@ oehealth/
     pyproject.toml                  # Package metadata + [tool.oe-build] config
     vrzn.toml                       # Version locations for vrzn
     include/oehealth/
-        oehealth.h               # Public C++ header
+        oehealth.h                  # Version macros; includes every public header
+        result.h, context.h, assessment.h, suite.h, json.h
+        assessments/                # One header per assessment
     src/
-        oehealth.cpp             # C++ implementation
+        *.cpp                       # Framework implementation
+        assessments/                # Assessment implementations
+        geometry/                   # Measurements and Engh & Huber target selection
+        data/engh_huber_2001.cpp    # Generated reference tables; do not edit
     swig/
         oehealth.i               # SWIG interface with OEMolBase typemaps
         CMakeLists.txt              # SWIG module build rules
@@ -117,72 +161,52 @@ oehealth/
             __init__.py             # Python package (imports, compat layer)
     scripts/
         build_python.py             # Build distributable wheels
+        generate_engh_huber.py      # Regenerate src/data/engh_huber_2001.cpp
     tests/
+        data/                       # 1crn.pdb and a standard_geometry.cif excerpt
         cpp/
             CMakeLists.txt          # C++ test build rules
-            test_oehealth.cpp     # C++ unit tests
+            test_*.cpp              # C++ unit tests
         python/
-            conftest.py             # Pytest fixtures (molecule helpers)
-            test_oehealth.py      # Python tests
+            conftest.py             # Pytest fixtures (crambin)
+            test_*.py               # Python tests
     .github/workflows/
         build-wheels.yml            # CI: multi-platform wheel builds
 ```
 
-## Adding New Functions
+## Adding New Assessments
 
-The scaffolded `calculate_molecular_weight` function demonstrates the pattern for
-wrapping C++ code that operates on OpenEye molecules. To add your own functions:
+**1. Declare** a class derived from `OEHEALTH::Assessment` in a new header
+under `include/oehealth/assessments/`, and include it from
+`include/oehealth/oehealth.h`. Override `GetName()` (a stable id),
+`GetDescription()`, and `Assess(const StructureContext&)`.
 
-**1. Declare in the header** (`include/oehealth/oehealth.h`):
+**2. Implement** it in `src/assessments/`, and add the file to
+`OEHEALTH_SOURCES` in `CMakeLists.txt`. Build results with the helpers in
+`src/common.h` (`make_atom_ref`, `atom_path`, `status_from_findings`).
 
-```cpp
-namespace OEHEALTH {
+**3. Expose in SWIG** (`swig/oehealth.i`): add a `%shared_ptr(...)` line for the
+class next to the others, and `%include` its header.
 
-double my_function(const OEChem::OEMolBase& mol);
-
-} // namespace OEHEALTH
-```
-
-**2. Implement** (`src/oehealth.cpp` or a new `.cpp` file):
-
-```cpp
-namespace OEHEALTH {
-
-double my_function(const OEChem::OEMolBase& mol) {
-    // Your implementation using OpenEye C++ API
-}
-
-} // namespace OEHEALTH
-```
-
-If you add new `.cpp` files, add them to the `OEHEALTH_SOURCES` list in
-`CMakeLists.txt`.
-
-**3. Expose in SWIG** (`swig/oehealth.i`), under the "Wrapped API" section:
-
-```swig
-namespace OEHEALTH {
-double my_function(const OEChem::OEMolBase& mol);
-}
-```
-
-Any function accepting `OEMolBase&` or `const OEMolBase&` will automatically use
-the cross-runtime typemaps.
-
-**4. Import in Python** (`python/oehealth/__init__.py`):
-
-```python
-from .oehealth import (
-    calculate_molecular_weight,
-    my_function,
-)
-```
+**4. Re-export in Python** (`python/oehealth/__init__.py`): add the class to the
+import list and `__all__`.
 
 **5. Rebuild and test:**
 
 ```bash
 cmake --build build-debug
+ctest --test-dir build-debug --output-on-failure
 pytest tests/python/ -v
+```
+
+## Reference Data
+
+`src/data/engh_huber_2001.cpp` is generated from `standard_geometry.cif`
+(NDB/wwPDB, distributed with CCP4 as `lib/data/standard_geometry.cif`). To
+regenerate it:
+
+```bash
+python3 scripts/generate_engh_huber.py /path/to/standard_geometry.cif src/data/engh_huber_2001.cpp
 ```
 
 ## Building Wheels
@@ -270,6 +294,10 @@ This project uses several tools to manage the build, packaging, and versioning:
 | [delocate](https://github.com/matthew-brett/delocate) | Bundles shared libraries into macOS wheels |
 | [auditwheel](https://github.com/pypa/auditwheel) | Bundles shared libraries into Linux wheels |
 | [pytest](https://docs.pytest.org/) | Test framework for the Python test suite |
+| [GoogleTest](https://github.com/google/googletest) | Test framework for the C++ test suite |
+| [nlohmann/json](https://github.com/nlohmann/json) | JSON serialization of results (fetched by CMake) |
+| [clang-format](https://clang.llvm.org/docs/ClangFormat.html), [clang-tidy](https://clang.llvm.org/extra/clang-tidy/) | C++ formatting and linting (`.clang-format`, `.clang-tidy`) |
+| [ruff](https://docs.astral.sh/ruff/), [mypy](https://mypy-lang.org/) | Python linting and type checking (`pyproject.toml`) |
 
 ## Version Management
 

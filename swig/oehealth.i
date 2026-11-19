@@ -7,6 +7,8 @@
 #include <oechem.h>
 #include <oegrid.h>
 
+#include <stdexcept>
+
 using namespace OEHEALTH;
 %}
 
@@ -355,13 +357,19 @@ OE_CROSS_RUNTIME_REF_TYPEMAPS(OEDocking::OEReceptor, _oehealth_is_oereceptor, "E
 %include "std_string.i"
 %include "stdint.i"
 %include "exception.i"
+%include "std_vector.i"
+%include "std_shared_ptr.i"
 
 // ============================================================================
 // Exception handling
 // ============================================================================
+// std::invalid_argument (bad options, 2D input, null suite child) becomes
+// ValueError; every other C++ exception becomes RuntimeError.
 %exception {
     try {
         $action
+    } catch (const std::invalid_argument& e) {
+        SWIG_exception(SWIG_ValueError, e.what());
     } catch (const std::exception& e) {
         SWIG_exception(SWIG_RuntimeError, e.what());
     } catch (...) {
@@ -379,11 +387,79 @@ OE_CROSS_RUNTIME_REF_TYPEMAPS(OEDocking::OEReceptor, _oehealth_is_oereceptor, "E
 // ============================================================================
 // Wrapped API
 // ============================================================================
+// Assessments are held by shared_ptr so Python and C++ suites can share them.
+%shared_ptr(OEHEALTH::Assessment)
+%shared_ptr(OEHEALTH::AssessmentSuite)
+%shared_ptr(OEHEALTH::BondLengthAssessment)
+%shared_ptr(OEHEALTH::BondAngleAssessment)
+%shared_ptr(OEHEALTH::ClashAssessment)
+%shared_ptr(OEHEALTH::ValenceAssessment)
+%shared_ptr(OEHEALTH::RamachandranAssessment)
+
+// The context borrows a molecule that Python could collect while the context
+// lives, so Python calls Run(mol) instead of Assess(ctx).
+%ignore OEHEALTH::StructureContext;
+%ignore OEHEALTH::ResidueInfo;
+%ignore OEHEALTH::Assessment::Assess;
+
+// Declare the element types before the vector templates, so the templates
+// exist when the result structs' vector members are wrapped.
 namespace OEHEALTH {
+struct AtomRef;
+struct Metric;
+struct Finding;
+struct AssessmentResult;
+class Assessment;
+}
 
-double calculate_molecular_weight(const OEChem::OEMolBase& mol);
+// Member variables are read by value, so a field such as result.metrics stays
+// valid after the result it came from is collected.
+%feature("naturalvar", "1");
 
-} // namespace OEHEALTH
+// Return options by copy for the same reason: a reference into a temporary
+// assessment would dangle once Python collects it. (GetChildren already
+// returns a tuple, which std_vector.i builds from a copy.)
+%define OEHEALTH_RETURN_COPY(TYPE)
+%typemap(out) const TYPE& {
+    $result = SWIG_NewPointerObj(new TYPE(*$1), $descriptor(TYPE*), SWIG_POINTER_OWN);
+}
+%enddef
+OEHEALTH_RETURN_COPY(OEHEALTH::BondLengthOptions)
+OEHEALTH_RETURN_COPY(OEHEALTH::BondAngleOptions)
+OEHEALTH_RETURN_COPY(OEHEALTH::ClashOptions)
+
+// SWIG cannot convert None to an assessment, so check here and raise the
+// ValueError that C++ raises for a null child.
+%pythonprepend OEHEALTH::AssessmentSuite::AssessmentSuite %{
+    if any(child is None for child in children):
+        raise ValueError("an assessment suite child is None")
+%}
+
+%template(AtomRefVector) std::vector<OEHEALTH::AtomRef>;
+%template(MetricVector) std::vector<OEHEALTH::Metric>;
+%template(FindingVector) std::vector<OEHEALTH::Finding>;
+%template(AssessmentResultVector) std::vector<OEHEALTH::AssessmentResult>;
+%template(AssessmentVector) std::vector<std::shared_ptr<OEHEALTH::Assessment>>;
+
+%include "oehealth/result.h"
+%include "oehealth/assessment.h"
+%include "oehealth/suite.h"
+%include "oehealth/assessments/bond_lengths.h"
+%include "oehealth/assessments/bond_angles.h"
+%include "oehealth/assessments/clashes.h"
+%include "oehealth/assessments/valence.h"
+%include "oehealth/assessments/ramachandran.h"
+%include "oehealth/json.h"
+
+%extend OEHEALTH::AssessmentResult {
+%pythoncode %{
+    def to_dict(self):
+        """Return this result as a dictionary, parsed from ``to_json(self)``."""
+        import json
+
+        return json.loads(to_json(self))
+%}
+}
 
 // ============================================================================
 // Module-level Python convenience code

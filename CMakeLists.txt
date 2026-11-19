@@ -73,7 +73,6 @@ set(OEHEALTH_SOURCES
     src/geometry/measure.cpp
     src/geometry/targets.cpp
     src/json.cpp
-    src/oehealth.cpp
     src/result.cpp
     src/suite.cpp
 )

@@ -13,7 +13,6 @@ add_executable(oehealth_tests
     test_clashes.cpp
     test_context.cpp
     test_json.cpp
-    test_oehealth.cpp
     test_protein_suite.cpp
     test_ramachandran.cpp
     test_reference_data.cpp
