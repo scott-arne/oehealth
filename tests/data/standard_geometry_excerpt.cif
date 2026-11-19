@@ -1,0 +1,79 @@
+# Excerpt of standard_geometry.cif (NDB/wwPDB, distributed with CCP4) used to
+# test scripts/generate_engh_huber.py. Values are copied from the full file.
+data_standard_geometry
+_standard_geometry.version "Fri Feb 22 17:25:15 GMT 2013"
+#
+# This loop has more values per row than fields, as in the full file. The
+# generator never reads it and must not reject the file because of it.
+loop_
+_chem_comp.comp_id
+_chem_comp.one_letter_code
+  ALA  A   1  16
+#
+loop_
+_chem_comp_atom.comp_id
+_chem_comp_atom.atom_id
+_chem_comp_atom.type_symbol
+ALA   N      N
+ALA   CA     C
+ALA   C      C
+ALA   O      O
+ALA   CB     C
+ALA   H      H
+PRO   N      N
+PRO   CA     C
+PRO   CD     C
+PRO   H2     H
+DA    "O5'"  O
+DA    "C5'"  C
+#
+loop_
+_chem_comp_bond.comp_id
+_chem_comp_bond.atom_id_1
+_chem_comp_bond.atom_id_2
+_chem_comp_bond.value_dist
+_chem_comp_bond.value_dist_esd
+_chem_comp_bond.description
+ALA    N     CA        1.459    0.020 .
+ALA    CA    CB        1.520    0.021 .
+ALA    N     H         0.860    0.020 .
+# .
+PRO    N     CD        1.474    0.014 "trans"
+PRO    N     CD        1.474    0.014 "cis"
+DA     "O5'" "C5'"     1.440    0.016 .
+#
+loop_
+_chem_comp_angle.comp_id
+_chem_comp_angle.atom_id_1
+_chem_comp_angle.atom_id_2
+_chem_comp_angle.atom_id_3
+_chem_comp_angle.value_angle
+_chem_comp_angle.value_angle_esd
+_chem_comp_angle.description
+ ALA      N      CA     C       111.0      2.7  .
+ PRO      CA     N      CD      111.7      1.4  "trans"
+ PRO      CA     N      CD      111.5      1.4  "cis"
+ PRO      C      N      CD      128.4      2.1  "trans"
+ PRO      C      N      CD      120.6      2.2  "cis"
+#
+loop_
+_chem_link_bond.atom_id_1
+_chem_link_bond.atom_id_2
+_chem_link_bond.value_dist
+_chem_link_bond.value_dist_esd
+_chem_link_bond.link_id
+ C    N        1.336    0.023    "NOT GLY PRO"
+ O3'  P        1.607    0.012    "NUC-ACID-ALL"
+SG   SG        2.033    0.016    "CYS"
+#
+loop_
+_chem_link_angle.atom_id_1
+_chem_link_angle.atom_id_2
+_chem_link_angle.atom_id_3
+_chem_link_angle.value_angle
+_chem_link_angle.value_angle_esd
+_chem_link_angle.link_id
+     O    C    N      122.7      1.6    "NOT PRO GLY"
+     O3'  P    O5'    104.0      1.9    "NA s"
+     C    N    CD     128.4      2.1    PRO-TRANS
+#

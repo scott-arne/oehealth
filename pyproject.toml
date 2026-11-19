@@ -123,7 +123,7 @@ known-first-party = ["oehealth"]
 [tool.mypy]
 python_version = "3.12"
 mypy_path = "python"
-files = ["python/oehealth", "tests/python"]
+files = ["python/oehealth", "scripts/generate_engh_huber.py", "tests/python"]
 exclude = ['^python/oehealth/oehealth\.py$', '^python/oehealth/_build_info\.py$']
 warn_unused_ignores = true
 warn_redundant_casts = true

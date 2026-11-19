@@ -11,6 +11,7 @@ FetchContent_MakeAvailable(googletest)
 add_executable(oehealth_tests
     test_context.cpp
     test_oehealth.cpp
+    test_reference_data.cpp
     test_result.cpp
     test_suite.cpp
 )
