@@ -1,5 +1,7 @@
 # Structure Health Assessment Framework: Design
 
+**Outcome:** implemented 2026-11-19; 20 decisions under docs/hyperpowers/decisions/.
+
 Date: 2026-11-18
 Status: approved design
 
@@ -155,6 +157,21 @@ Out of scope for this round:
   j first, then GLY in residue i. oehealth uses the same rules. Rejected:
   PRO precedence for both CA–C–N and O–C–N in a Gly–Pro pair (the first
   design, which differs from the reference implementation for CA–C–N).
+- **Chain identifiers use OEChem's extended chain id.** `chain_id_of`
+  reads `OEResidue::GetExtChainID()`, not the one-character
+  `GetChainID()`, so multi-character mmCIF chains stay distinct in residue
+  grouping, peptide-neighbor checks, and `AtomRef`. Rejected: the
+  one-character chain id (merges chains such as `AA` and `AB` in large
+  mmCIF assemblies).
+- **Ramachandran analysis starts from each residue's CA atom.**
+  `RamachandranAssessment` builds `OEBio::OERamachandranAnalysis` from the
+  residue's CA atom. Both constructors agree for structures without
+  alternate locations; a residue with alternate CA atoms is classified
+  from its first CA, as the bond and angle checks use the first atom of
+  each name. Rejected: the `(mol, residue)` constructor (it scans the
+  molecule for every residue, so time grows quadratically: 25 s at 20,000
+  residues against 0.5 s; it also leaves residues with alternate CA atoms
+  unassessed when alternate locations are kept).
 
 ## Architecture
 
