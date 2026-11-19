@@ -42,6 +42,19 @@ class TestAssessments:
         assert atom.residue_number > 0
         assert atom.atom_name != ""
 
+    def test_vector_fields_are_owning_copies(self, crambin):
+        # SWIG converts std::vector members to tuples of owning element proxies
+        # (naturalvar). A regression to references would make these proxies
+        # non-owning views into the result, which they would outlive.
+        result = oehealth.BondLengthAssessment().Run(crambin)
+        assert isinstance(result.findings, tuple)
+        assert isinstance(result.metrics, tuple)
+        assert len(result.findings) > 0
+        assert result.findings[0].this.own()
+        assert isinstance(result.findings[0].atoms, tuple)
+        assert result.findings[0].atoms[0].this.own()
+        assert result.metrics[0].this.own()
+
     def test_rejects_2d_molecule(self, ethanol_2d):
         with pytest.raises(ValueError, match="3D"):
             oehealth.BondLengthAssessment().Run(ethanol_2d)
@@ -70,6 +83,13 @@ class TestOptions:
         assert returned.warning_z == pytest.approx(3.0)
         assert returned.error_z == pytest.approx(6.0)
 
+    def test_get_options_returns_an_owning_copy(self):
+        options = oehealth.ClashAssessment().GetOptions()
+        assert options.this.own()
+        # Mutating the copy must not change the assessment that produced it.
+        options.warning_overlap = 0.9
+        assert oehealth.ClashAssessment().GetOptions().warning_overlap == pytest.approx(0.4)
+
     def test_invalid_options_raise_value_error(self):
         options = oehealth.ClashOptions()
         options.polar_contact_distance = 0.0
@@ -88,6 +108,14 @@ class TestOptions:
 
 class TestSuites:
     """Suites compose assessments in C++ and from Python."""
+
+    def test_get_children_returns_a_tuple_of_owning_proxies(self):
+        children = oehealth.make_protein_geometry_suite().GetChildren()
+        gc.collect()
+        assert isinstance(children, tuple)
+        assert len(children) == len(ASSESSMENTS)
+        assert all(child.this.own() for child in children)
+        assert children[0].GetName() == ASSESSMENTS[0][1]
 
     def test_protein_geometry_suite(self, crambin):
         suite = oehealth.make_protein_geometry_suite()
@@ -144,3 +172,30 @@ def test_version_available():
     assert hasattr(oehealth, "__version_info__")
     assert oehealth.__version__ == "0.1.0"
     assert oehealth.__version_info__ == (0, 1, 0)
+
+
+STATUS_ORDER = [
+    oehealth.Status_NOT_APPLICABLE,
+    oehealth.Status_PASS,
+    oehealth.Status_WARN,
+    oehealth.Status_FAIL,
+    oehealth.Status_ERROR,
+]
+
+
+class TestWorstStatus:
+    """worst_status returns the later of two statuses in declaration order."""
+
+    @pytest.mark.parametrize("first", range(5))
+    @pytest.mark.parametrize("second", range(5))
+    def test_returns_the_later_status(self, first, second):
+        a, b = STATUS_ORDER[first], STATUS_ORDER[second]
+        assert oehealth.worst_status(a, b) == STATUS_ORDER[max(first, second)]
+
+    def test_error_dominates_and_not_applicable_yields(self):
+        assert oehealth.worst_status(oehealth.Status_ERROR, oehealth.Status_PASS) == (
+            oehealth.Status_ERROR
+        )
+        assert oehealth.worst_status(oehealth.Status_NOT_APPLICABLE, oehealth.Status_PASS) == (
+            oehealth.Status_PASS
+        )

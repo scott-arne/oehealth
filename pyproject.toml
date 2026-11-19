@@ -31,6 +31,13 @@ dev = ["pytest>=7.0", "vrzn>=0.1.0"]
 testpaths = ["tests/python"]
 python_files = ["test_*.py"]
 addopts = "-v"
+# SWIG-generated modules trigger these on import under Python 3.12+; they are
+# not from this project's code. Only these three messages are ignored.
+filterwarnings = [
+    "ignore:builtin type SwigPyObject has no __module__ attribute:DeprecationWarning",
+    "ignore:builtin type SwigPyPacked has no __module__ attribute:DeprecationWarning",
+    "ignore:builtin type swigvarlink has no __module__ attribute:DeprecationWarning",
+]
 
 [tool.scikit-build]
 cmake.version = ">=3.21"
@@ -64,7 +71,7 @@ rpath-strategy = "platform"  # "platform" = @loader_path/../openeye/libs/{platfo
 # (they are provided at runtime by openeye-toolkits, not bundled in the wheel)
 expected-missing-libs = [
     "liboechem", "liboesystem", "liboeplatform",
-    "liboemath", "libzstd", "liboebio", "liboegrid",
+    "liboemath", "libzstd", "liboebio", "liboegrid", "liboefizzchem",
 ]
 
 # Additional CMake defines passed during wheel build (beyond the standard ones)
