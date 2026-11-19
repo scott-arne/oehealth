@@ -7,7 +7,10 @@ namespace OEHEALTH {
 
 /// \brief Reports atoms whose valence OEChem considers invalid.
 ///
-/// Runs OECheckAtomValence on every atom; each failure is an ERROR finding,
+/// Runs OECheckAtomValence on every atom of an element in OEChem's valence
+/// model (H, B, C, N, O, F, Si, P, S, Cl, Se, Br, I); other elements, including
+/// metals and atomic number 0, are skipped because OEChem accepts them
+/// unchecked and prints a warning. Each failure is an ERROR finding,
 /// code "invalid_valence". Implicit hydrogen counts must be assigned, as
 /// OpenEye's readers do by default: with zeroed counts, normal atoms are
 /// reported as under-valent.

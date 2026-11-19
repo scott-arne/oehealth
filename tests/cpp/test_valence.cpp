@@ -5,6 +5,24 @@
 
 namespace OEHEALTH::test {
 
+namespace {
+
+/// Redirects OEThrow to a string for the lifetime of the object.
+class ScopedOEThrowCapture {
+public:
+    ScopedOEThrowCapture() { OESystem::OEThrow.SetOutputStream(stream_); }
+    ~ScopedOEThrowCapture() { OESystem::OEThrow.SetOutputStream(OEPlatform::oeerr); }
+    ScopedOEThrowCapture(const ScopedOEThrowCapture&) = delete;
+    ScopedOEThrowCapture& operator=(const ScopedOEThrowCapture&) = delete;
+
+    std::string Text() { return stream_.str(); }
+
+private:
+    OEPlatform::oeosstream stream_;
+};
+
+} // namespace
+
 TEST(ValenceAssessment, Name) {
     const ValenceAssessment assessment;
     EXPECT_EQ(assessment.GetName(), "valence");
@@ -48,6 +66,18 @@ TEST(ValenceAssessment, ZeroedImplicitHydrogensAreReported) {
         atom->SetImplicitHCount(0);
     }
     EXPECT_GT(ValenceAssessment().Run(mol).findings.size(), 0U);
+}
+
+TEST(ValenceAssessment, ElementsOutsideTheValenceModelAreSkippedSilently) {
+    // OEChem accepts these unchecked but prints a warning for each.
+    ScopedOEThrowCapture capture;
+    OEChem::OEGraphMol mol;
+    add_atom(mol, OEChem::OEElemNo::Zn, "ZN", "ZN", 1, 0.0, 0.0, 0.0);
+    add_atom(mol, OEChem::OEElemNo::Xe, "XE", "XE", 2, 10.0, 0.0, 0.0);
+    const AssessmentResult result = ValenceAssessment().Run(mol);
+    EXPECT_TRUE(result.findings.empty());
+    EXPECT_EQ(result.status, Status::PASS);
+    EXPECT_EQ(capture.Text(), "");
 }
 
 TEST(ValenceAssessment, EmptyMoleculeIsNotApplicable) {

@@ -2,6 +2,7 @@
 
 #include "geometry/measure.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -23,24 +24,58 @@ bool row_applies(const char* row_variant, const std::string& variant) {
     return std::strcmp(row_variant, ".") == 0 || variant == row_variant;
 }
 
-bool has_disulfide(const StructureContext& ctx, std::size_t residue_index) {
+/// Disulfide-bonded CYS pairs, found once per term collection.
+struct Disulfides {
+    /// Residue index pairs (first < second), ordered by first and then second.
+    std::vector<std::pair<std::size_t, std::size_t>> pairs;
+    /// Per residue: whether its SG atom is in a pair.
+    std::vector<bool> bonded;
+};
+
+/// Finds SG-SG pairs within DISULFIDE_CUTOFF without comparing every pair of
+/// CYS residues: SG atoms are sorted by x and each is compared only with the
+/// atoms whose x lies within the cutoff, which keeps the cost near n log n for
+/// structures that are not densely packed along x.
+Disulfides find_disulfides(const StructureContext& ctx) {
     const auto& residues = ctx.GetResidues();
-    const OEChem::OEAtomBase* sulfur = residues[residue_index].FindAtom("SG");
-    if (sulfur == nullptr) {
-        return false;
-    }
-    for (std::size_t other = 0; other < residues.size(); ++other) {
-        if (other == residue_index || !is_residue(residues[other], "CYS")) {
+    struct Sulfur {
+        std::size_t residue;
+        const OEChem::OEAtomBase* atom;
+        double x;
+    };
+    std::vector<Sulfur> sulfurs;
+    for (std::size_t i = 0; i < residues.size(); ++i) {
+        if (!is_residue(residues[i], "CYS")) {
             continue;
         }
-        const OEChem::OEAtomBase* partner = residues[other].FindAtom("SG");
-        if (partner != nullptr &&
-            distance(ctx.GetMolecule(), sulfur, partner) <= DISULFIDE_CUTOFF) {
-            return true;
+        if (const OEChem::OEAtomBase* atom = residues[i].FindAtom("SG")) {
+            sulfurs.push_back({i, atom, coordinates(ctx.GetMolecule(), atom)[0]});
         }
     }
-    return false;
+    std::sort(sulfurs.begin(), sulfurs.end(),
+              [](const Sulfur& a, const Sulfur& b) { return a.x < b.x; });
+
+    Disulfides result;
+    result.bonded.assign(residues.size(), false);
+    for (std::size_t a = 0; a < sulfurs.size(); ++a) {
+        for (std::size_t b = a + 1;
+             b < sulfurs.size() && sulfurs[b].x - sulfurs[a].x <= DISULFIDE_CUTOFF; ++b) {
+            if (sulfurs[a].residue != sulfurs[b].residue &&
+                distance(ctx.GetMolecule(), sulfurs[a].atom, sulfurs[b].atom) <= DISULFIDE_CUTOFF) {
+                result.pairs.emplace_back(std::min(sulfurs[a].residue, sulfurs[b].residue),
+                                          std::max(sulfurs[a].residue, sulfurs[b].residue));
+                result.bonded[sulfurs[a].residue] = true;
+                result.bonded[sulfurs[b].residue] = true;
+            }
+        }
+    }
+    // The sweep visits pairs in x order; term order must follow residue order.
+    std::sort(result.pairs.begin(), result.pairs.end());
+    return result;
 }
+
+std::string variant_for(const StructureContext& ctx, std::size_t residue_index,
+                        const Disulfides& disulfides);
 
 std::string his_variant(const StructureContext& ctx, std::size_t residue_index) {
     const ResidueInfo& residue = ctx.GetResidues()[residue_index];
@@ -89,10 +124,10 @@ void add_term(std::vector<GeometryTerm>& terms, std::vector<const OEChem::OEAtom
     terms.push_back(GeometryTerm{std::move(atoms), ideal, sigma, std::string(variant)});
 }
 
-void add_residue_bonds(const StructureContext& ctx, std::size_t i,
+void add_residue_bonds(const StructureContext& ctx, std::size_t i, const Disulfides& disulfides,
                        std::vector<GeometryTerm>& terms) {
     const ResidueInfo& residue = ctx.GetResidues()[i];
-    const std::string variant = residue_variant(ctx, i);
+    const std::string variant = variant_for(ctx, i, disulfides);
     for (const data::ResidueBond& row : data::residue_bonds()) {
         if (residue.name == row.residue && row_applies(row.variant, variant)) {
             add_term(terms, {residue.FindAtom(row.atom1), residue.FindAtom(row.atom2)}, row.ideal,
@@ -101,10 +136,10 @@ void add_residue_bonds(const StructureContext& ctx, std::size_t i,
     }
 }
 
-void add_residue_angles(const StructureContext& ctx, std::size_t i,
+void add_residue_angles(const StructureContext& ctx, std::size_t i, const Disulfides& disulfides,
                         std::vector<GeometryTerm>& terms) {
     const ResidueInfo& residue = ctx.GetResidues()[i];
-    const std::string variant = residue_variant(ctx, i);
+    const std::string variant = variant_for(ctx, i, disulfides);
     for (const data::ResidueAngle& row : data::residue_angles()) {
         if (residue.name == row.residue && row_applies(row.variant, variant)) {
             add_term(terms,
@@ -180,37 +215,24 @@ void add_link_angles(const StructureContext& ctx, std::size_t i, std::size_t j,
     }
 }
 
-void add_disulfide_bonds(const StructureContext& ctx, std::vector<GeometryTerm>& terms) {
+void add_disulfide_bonds(const StructureContext& ctx, const Disulfides& disulfides,
+                         std::vector<GeometryTerm>& terms) {
     const auto& residues = ctx.GetResidues();
     const data::LinkBond* row = find_link_bond("SG", "SG", LinkVariant::DISULFIDE);
     if (row == nullptr) {
         return;
     }
-    for (std::size_t a = 0; a < residues.size(); ++a) {
-        if (!is_residue(residues[a], "CYS")) {
-            continue;
-        }
-        const OEChem::OEAtomBase* first = residues[a].FindAtom("SG");
-        for (std::size_t b = a + 1; b < residues.size() && first != nullptr; ++b) {
-            if (!is_residue(residues[b], "CYS")) {
-                continue;
-            }
-            const OEChem::OEAtomBase* second = residues[b].FindAtom("SG");
-            if (second != nullptr &&
-                distance(ctx.GetMolecule(), first, second) <= DISULFIDE_CUTOFF) {
-                add_term(terms, {first, second}, row->ideal, row->sigma,
-                         link_variant_name(LinkVariant::DISULFIDE));
-            }
-        }
+    for (const auto& [a, b] : disulfides.pairs) {
+        add_term(terms, {residues[a].FindAtom("SG"), residues[b].FindAtom("SG")}, row->ideal,
+                 row->sigma, link_variant_name(LinkVariant::DISULFIDE));
     }
 }
 
-} // namespace
-
-std::string residue_variant(const StructureContext& ctx, std::size_t residue_index) {
+std::string variant_for(const StructureContext& ctx, std::size_t residue_index,
+                        const Disulfides& disulfides) {
     const ResidueInfo& residue = ctx.GetResidues()[residue_index];
     if (is_residue(residue, "CYS")) {
-        return has_disulfide(ctx, residue_index) ? "SS" : "SH";
+        return disulfides.bonded[residue_index] ? "SS" : "SH";
     }
     if (is_residue(residue, "PRO")) {
         return preceding_peptide_is_cis(ctx, residue_index) ? "cis" : "trans";
@@ -219,6 +241,17 @@ std::string residue_variant(const StructureContext& ctx, std::size_t residue_ind
         return his_variant(ctx, residue_index);
     }
     return ".";
+}
+
+} // namespace
+
+std::string residue_variant(const StructureContext& ctx, std::size_t residue_index) {
+    // Collection shares one disulfide search; a single lookup only needs one for CYS.
+    if (is_residue(ctx.GetResidues()[residue_index], "CYS")) {
+        return variant_for(ctx, residue_index, find_disulfides(ctx));
+    }
+    Disulfides none;
+    return variant_for(ctx, residue_index, none);
 }
 
 bool preceding_peptide_is_cis(const StructureContext& ctx, std::size_t residue_index) {
@@ -325,27 +358,29 @@ std::string_view link_variant_name(data::LinkVariant variant) {
 std::vector<GeometryTerm> collect_bond_terms(const StructureContext& ctx) {
     std::vector<GeometryTerm> terms;
     const auto& residues = ctx.GetResidues();
+    const Disulfides disulfides = find_disulfides(ctx);
     for (std::size_t i = 0; i < residues.size(); ++i) {
         if (!residues[i].is_standard_amino_acid) {
             continue;
         }
-        add_residue_bonds(ctx, i, terms);
+        add_residue_bonds(ctx, i, disulfides, terms);
         if (const auto j = peptide_successor(ctx, i)) {
             add_link_bond(ctx, i, *j, terms);
         }
     }
-    add_disulfide_bonds(ctx, terms);
+    add_disulfide_bonds(ctx, disulfides, terms);
     return terms;
 }
 
 std::vector<GeometryTerm> collect_angle_terms(const StructureContext& ctx) {
     std::vector<GeometryTerm> terms;
     const auto& residues = ctx.GetResidues();
+    const Disulfides disulfides = find_disulfides(ctx);
     for (std::size_t i = 0; i < residues.size(); ++i) {
         if (!residues[i].is_standard_amino_acid) {
             continue;
         }
-        add_residue_angles(ctx, i, terms);
+        add_residue_angles(ctx, i, disulfides, terms);
         if (const auto j = peptide_successor(ctx, i)) {
             add_link_angles(ctx, i, *j, terms);
         }

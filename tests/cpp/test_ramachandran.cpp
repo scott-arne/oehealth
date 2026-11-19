@@ -3,6 +3,8 @@
 #include "oehealth/assessments/ramachandran.h"
 #include "test_helpers.h"
 
+#include <oebio.h>
+
 namespace OEHEALTH::test {
 
 TEST(RamachandranAssessment, Name) {
@@ -27,8 +29,30 @@ TEST(RamachandranAssessment, CrambinMatchesWwpdbReport) {
     // The two termini cannot be classified.
     EXPECT_EQ(metric(result, "n_assessed"), 44.0);
     EXPECT_EQ(metric(result, "n_outliers"), 0.0);
-    EXPECT_EQ(metric(result, "n_favored") + metric(result, "n_allowed"), 44.0);
-    EXPECT_DOUBLE_EQ(metric(result, "pct_favored"), 100.0 * metric(result, "n_favored") / 44.0);
+    // Count the categories directly with OEBio's (mol, residue) constructor, so a swap of
+    // Favored and Allowed in the assessment cannot pass.
+    double favored = 0.0;
+    double allowed = 0.0;
+    double outliers = 0.0;
+    for (OESystem::OEIter<OEChem::OEAtomBase> atom = mol.GetAtoms(); atom; ++atom) {
+        if (trimmed(atom->GetName()) != "CA") {
+            continue;
+        }
+        const OEBio::OERamachandranAnalysis analysis(mol, OEChem::OEAtomGetResidue(atom));
+        const unsigned int category = analysis.GetRamaCategory();
+        if (category == OEBio::OERamaCategory::Favored) {
+            favored += 1.0;
+        } else if (category == OEBio::OERamaCategory::Allowed) {
+            allowed += 1.0;
+        } else if (category == OEBio::OERamaCategory::Outlier) {
+            outliers += 1.0;
+        }
+    }
+    EXPECT_EQ(metric(result, "n_favored"), favored);
+    EXPECT_EQ(metric(result, "n_allowed"), allowed);
+    EXPECT_EQ(metric(result, "n_outliers"), outliers);
+    EXPECT_DOUBLE_EQ(metric(result, "pct_favored"),
+                     100.0 * favored / (favored + allowed + outliers));
     EXPECT_EQ(metric(result, "pct_outliers"), 0.0);
 }
 

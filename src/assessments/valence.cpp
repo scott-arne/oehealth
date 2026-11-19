@@ -6,6 +6,36 @@
 
 namespace OEHEALTH {
 
+namespace {
+
+/// OEChem's valence model covers only these elements. OECheckAtomValence
+/// accepts every other element unchecked (it returns true) after printing an
+/// "Unknown element in TypeCheck" warning through OEThrow, so skipping them
+/// changes no result and keeps metalloproteins from filling stderr.
+bool has_valence_model(unsigned int atomic_num) {
+    using namespace OEChem::OEElemNo;
+    switch (atomic_num) {
+        case H:
+        case B:
+        case C:
+        case N:
+        case O:
+        case F:
+        case Si:
+        case P:
+        case S:
+        case Cl:
+        case Se:
+        case Br:
+        case I:
+            return true;
+        default:
+            return false;
+    }
+}
+
+} // namespace
+
 ValenceAssessment::ValenceAssessment() = default;
 
 std::string ValenceAssessment::GetName() const { return "valence"; }
@@ -26,7 +56,7 @@ AssessmentResult ValenceAssessment::Assess(const StructureContext& ctx) const {
     }
 
     for (OESystem::OEIter<OEChem::OEAtomBase> atom = mol.GetAtoms(); atom; ++atom) {
-        if (OEChem::OECheckAtomValence(atom)) {
+        if (!has_valence_model(atom->GetAtomicNum()) || OEChem::OECheckAtomValence(atom)) {
             continue;
         }
         Finding finding;

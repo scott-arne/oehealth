@@ -4,6 +4,7 @@
 #include "geometry/targets.h"
 #include "test_helpers.h"
 
+#include <array>
 #include <limits>
 #include <string>
 #include <utility>
@@ -304,6 +305,26 @@ TEST(Targets, FreeCysteineBondTermIsSH) {
     ASSERT_NE(sh, nullptr);
     EXPECT_EQ(sh->variant, "SH");
     EXPECT_DOUBLE_EQ(sh->ideal, 1.812);
+}
+
+TEST(Targets, DisulfideTermsFollowResidueOrderNotCoordinateOrder) {
+    // Residues 1-4 carry only SG atoms. The x-sorted order is 2, 4, 1, 3, so the
+    // pair (2, 4) is found before (1, 3) and must still come out second.
+    OEChem::OEGraphMol mol;
+    const std::array<double, 4> x_values = {10.0, 0.0, 11.5, 1.5};
+    for (int i = 0; i < 4; ++i) {
+        add_atom(mol, OEChem::OEElemNo::S, "SG", "CYS", i + 1, x_values[i], 0.0, 0.0);
+    }
+    const StructureContext ctx(mol);
+    std::vector<std::array<int, 2>> pairs;
+    for (const auto& term : geometry::collect_bond_terms(ctx)) {
+        if (term.variant == "DISULFIDE") {
+            pairs.push_back({OEChem::OEAtomGetResidue(term.atoms[0]).GetResidueNumber(),
+                             OEChem::OEAtomGetResidue(term.atoms[1]).GetResidueNumber()});
+        }
+    }
+    const std::vector<std::array<int, 2>> expected{{1, 3}, {2, 4}};
+    EXPECT_EQ(pairs, expected);
 }
 
 TEST(Measure, TorsionOfPlanarTransIsPositive180) {

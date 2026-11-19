@@ -531,7 +531,12 @@ Disulfide terms: for each pair of CYS residues whose SG atoms are within
 ### `valence`: `ValenceAssessment`
 
 - No options.
-- Runs `OEChem::OECheckAtomValence` on every atom. Each failure is an ERROR
+- Runs `OEChem::OECheckAtomValence` on every atom whose element OEChem's
+  valence model covers (H, B, C, N, O, F, Si, P, S, Cl, Se, Br, I). Other
+  elements, including metals, noble gases, and atomic number 0, are
+  skipped: OEChem accepts them unchecked (returns true) and prints an
+  "Unknown element in TypeCheck" warning through OEThrow, so skipping
+  changes no result and keeps the warning off stderr. Each failure is an ERROR
   finding, code `invalid_valence`: one atom; `observed` = the atom's
   valence (`GetValence()`, which includes implicit hydrogens); `expected`
   and `deviation` NaN; `details` = `formal_charge`, `implicit_h_count`,
@@ -546,8 +551,11 @@ Disulfide terms: for each pair of CYS residues whose SG atoms are within
 
 - No options; categories come from OEBio.
 - For each standard amino-acid residue, constructs
-  `OEBio::OERamachandranAnalysis(mol, residue)` using the residue of its CA
-  atom. Residues with no CA, or whose category is `OERamaCategory::Unknown`
+  `OEBio::OERamachandranAnalysis(atom)` from its CA atom. The
+  `(mol, residue)` constructor gives identical results (checked on crambin,
+  with a chain break, and with offset and gapped residue numbering) but scans
+  the whole molecule per call, so it is quadratic: 22 s against 0.1 s at
+  20,000 residues. Residues with no CA, or whose category is `OERamaCategory::Unknown`
   (termini and breaks), are not assessed.
 - Each Outlier is a WARNING finding, code `ramachandran_outlier`: the
   residue's N, CA, and C atoms (those present); `observed` = the OEBio

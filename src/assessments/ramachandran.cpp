@@ -24,7 +24,6 @@ std::string RamachandranAssessment::GetDescription() const {
 }
 
 AssessmentResult RamachandranAssessment::Assess(const StructureContext& ctx) const {
-    const OEChem::OEMolBase& mol = ctx.GetMolecule();
     AssessmentResult result;
     result.assessment = GetName();
 
@@ -39,7 +38,9 @@ AssessmentResult RamachandranAssessment::Assess(const StructureContext& ctx) con
         if (alpha == nullptr) {
             continue;
         }
-        const OEBio::OERamachandranAnalysis analysis(mol, OEChem::OEAtomGetResidue(alpha));
+        // The (mol, residue) constructor gives the same results but scans the whole
+        // molecule on every call, which made large structures quadratic.
+        const OEBio::OERamachandranAnalysis analysis(alpha);
         const unsigned int category = analysis.GetRamaCategory();
         if (category == OEBio::OERamaCategory::Favored) {
             ++n_favored;
