@@ -17,7 +17,7 @@ outliers. Assessments combine into suites, and every result serializes to JSON.
 - **OpenEye Python Toolkits** -- `pip install openeye-toolkits`
 - **CMake** >= 3.16
 - **SWIG** >= 4.0
-- **Python** >= 3.12
+- **Python** >= 3.11
 
 ## Getting Started
 

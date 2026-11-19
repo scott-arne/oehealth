@@ -377,7 +377,7 @@ jobs:
 
       - name: Validate abi3 import table
         run: |
-          # The wheel advertises cp310-abi3-win_amd64; the compiled .pyd must
+          # The wheel advertises cp311-abi3-win_amd64; the compiled .pyd must
           # link python3.dll (stable ABI) and must NOT link python3XX.dll
           # (versioned), otherwise the wheel silently breaks on any Python
           # minor other than the build Python.
