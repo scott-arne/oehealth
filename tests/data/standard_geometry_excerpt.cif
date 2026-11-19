@@ -3,8 +3,8 @@
 data_standard_geometry
 _standard_geometry.version "Fri Feb 22 17:25:15 GMT 2013"
 #
-# This loop has more values per row than fields, as in the full file. The
-# generator never reads it and must not reject the file because of it.
+# This row has twice as many values as the loop has fields, as in the full
+# file, so it parses as two rows. The generator never reads this loop.
 loop_
 _chem_comp.comp_id
 _chem_comp.one_letter_code

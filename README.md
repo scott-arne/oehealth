@@ -228,6 +228,13 @@ regenerate it:
 python3 scripts/generate_engh_huber.py /path/to/standard_geometry.cif src/data/engh_huber_2001.cpp
 ```
 
+The generated file records the SHA-256 of its source. A regeneration test in
+`tests/python/test_generate_engh_huber.py` rebuilds the table and requires a
+byte-for-byte match. It finds the source through the
+`OEHEALTH_STANDARD_GEOMETRY_CIF` environment variable (or `$CCP4/lib/data/standard_geometry.cif`)
+and is skipped when the file is missing or its checksum differs from the
+recorded one.
+
 ## Building Wheels
 
 ### Local Build

@@ -592,8 +592,13 @@ The generated file holds `constexpr` arrays of plain structs:
 
 `src/data/engh_huber_2001.h` declares the structs and accessors. The
 generated file's header comment records the Engh & Huber citation, the
-source file name and its `_standard_geometry.version` string, and the
-command that generated it. `src/geometry/targets.{h,cpp}` implement the
+source file name, its `_standard_geometry.version` string, a
+`// Source SHA-256:` line with the digest of the source bytes, and the
+command that generated it. A pytest regeneration test locates the full
+source through the `OEHEALTH_STANDARD_GEOMETRY_CIF` environment variable
+(else `$CCP4/lib/data/standard_geometry.cif`), skips if it is absent or its
+digest differs from the recorded one, and otherwise requires the generator
+to reproduce the committed file byte for byte. `src/geometry/targets.{h,cpp}` implement the
 variant selection described under Assessments.
 
 Assumption: redistributing these values in this MIT-licensed repository is
