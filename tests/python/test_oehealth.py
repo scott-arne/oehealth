@@ -59,6 +59,7 @@ class TestOptions:
         assert options.warning_overlap == pytest.approx(0.4)
         assert options.error_overlap == pytest.approx(1.0)
         assert options.polar_contact_distance == pytest.approx(2.9)
+        assert options.hbond_contact_distance == pytest.approx(1.9)
 
     def test_set_fields(self):
         options = oehealth.BondLengthOptions()
@@ -74,6 +75,10 @@ class TestOptions:
         options.polar_contact_distance = 0.0
         with pytest.raises(ValueError):
             oehealth.ClashAssessment(options)
+        bad_hbond = oehealth.ClashOptions()
+        bad_hbond.hbond_contact_distance = 0.0
+        with pytest.raises(ValueError):
+            oehealth.ClashAssessment(bad_hbond)
         reversed_thresholds = oehealth.BondAngleOptions()
         reversed_thresholds.warning_z = 5.0
         reversed_thresholds.error_z = 4.0

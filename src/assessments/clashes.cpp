@@ -23,6 +23,19 @@ bool is_polar(const OEChem::OEAtomBase* atom) {
     return element == OEChem::OEElemNo::N || element == OEChem::OEElemNo::O;
 }
 
+// A hydrogen bonded to N or O. An unbonded hydrogen is not polar.
+bool is_polar_hydrogen(const OEChem::OEAtomBase* atom) {
+    if (atom->GetAtomicNum() != OEChem::OEElemNo::H) {
+        return false;
+    }
+    for (OESystem::OEIter<OEChem::OEAtomBase> nbr = atom->GetAtoms(); nbr; ++nbr) {
+        if (is_polar(nbr)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool within_three_bonds(const OEChem::OEAtomBase* a, const OEChem::OEAtomBase* b) {
     for (OESystem::OEIter<OEChem::OEAtomBase> first = a->GetAtoms(); first; ++first) {
         if (first->GetIdx() == b->GetIdx()) {
@@ -61,6 +74,9 @@ ClashAssessment::ClashAssessment(const ClashOptions& options) : options_(options
     if (!std::isfinite(options_.polar_contact_distance) || options_.polar_contact_distance <= 0.0) {
         throw std::invalid_argument("polar_contact_distance must be finite and positive");
     }
+    if (!std::isfinite(options_.hbond_contact_distance) || options_.hbond_contact_distance <= 0.0) {
+        throw std::invalid_argument("hbond_contact_distance must be finite and positive");
+    }
 }
 
 const ClashOptions& ClashAssessment::GetOptions() const { return options_; }
@@ -79,6 +95,7 @@ AssessmentResult ClashAssessment::Assess(const StructureContext& ctx) const {
 
     std::vector<double> radius(mol.GetMaxAtomIdx(), 0.0);
     std::vector<bool> in_scope(mol.GetMaxAtomIdx(), false);
+    std::vector<bool> polar_hydrogen(mol.GetMaxAtomIdx(), false);
     std::size_t n_in_scope = 0;
     double max_radius = 0.0;
     for (OESystem::OEIter<OEChem::OEAtomBase> atom = mol.GetAtoms(); atom; ++atom) {
@@ -87,6 +104,7 @@ AssessmentResult ClashAssessment::Assess(const StructureContext& ctx) const {
             continue;
         }
         in_scope[atom->GetIdx()] = true;
+        polar_hydrogen[atom->GetIdx()] = is_polar_hydrogen(atom);
         radius[atom->GetIdx()] = OEChem::OEGetBondiVdWRadius(element);
         max_radius = std::max(max_radius, radius[atom->GetIdx()]);
         ++n_in_scope;
@@ -100,8 +118,9 @@ AssessmentResult ClashAssessment::Assess(const StructureContext& ctx) const {
     }
 
     std::vector<Clash> clashes;
-    const double cutoff = std::max(2.0 * max_radius, options_.polar_contact_distance) -
-                          options_.warning_overlap + SEARCH_MARGIN;
+    const double max_contact = std::max(
+        {2.0 * max_radius, options_.polar_contact_distance, options_.hbond_contact_distance});
+    const double cutoff = max_contact - options_.warning_overlap + SEARCH_MARGIN;
     if (cutoff > 0.0) {
         for (OESystem::OEIter<OEChem::OENbrs> pair = OEChem::OEGetNearestNbrs(mol, cutoff); pair;
              ++pair) {
@@ -113,9 +132,13 @@ AssessmentResult ClashAssessment::Assess(const StructureContext& ctx) const {
             if (a->GetIdx() > b->GetIdx()) {
                 std::swap(a, b);
             }
-            const double contact = is_polar(a) && is_polar(b)
-                                       ? options_.polar_contact_distance
-                                       : radius[a->GetIdx()] + radius[b->GetIdx()];
+            double contact = radius[a->GetIdx()] + radius[b->GetIdx()];
+            if (is_polar(a) && is_polar(b)) {
+                contact = options_.polar_contact_distance;
+            } else if ((polar_hydrogen[a->GetIdx()] && is_polar(b)) ||
+                       (polar_hydrogen[b->GetIdx()] && is_polar(a))) {
+                contact = options_.hbond_contact_distance;
+            }
             const double d = geometry::distance(mol, a, b);
             const double overlap = contact - d;
             if (meets_threshold(overlap, options_.error_overlap)) {

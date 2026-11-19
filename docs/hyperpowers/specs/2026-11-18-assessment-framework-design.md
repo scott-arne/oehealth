@@ -119,6 +119,17 @@ Out of scope for this round:
   states).
 - **Tooling: clang-format, clang-tidy, ruff, and mypy are configured from
   the start.** Rejected: relying on tests alone.
+- **Polar hydrogens and N/O acceptors use a hydrogen-bond contact
+  distance.** A pair of a hydrogen bonded to N or O and an N or O atom
+  uses `hbond_contact_distance` (1.9 Å) instead of Bondi radii, so
+  hydrogen bonds in protonated structures are not reported as clashes. 1.9
+  Å is `polar_contact_distance` less a 1.0 Å donor–H bond, and lies within
+  the limit Probe applies (it allows donor-H/acceptor pairs 0.6 Å of
+  overlap on its own radii: 1.85 Å for H···O, 2.00 Å for H···N). Rejected:
+  Bondi radii for these pairs (1.20 + 1.52 Å flags every normal hydrogen
+  bond; crambin after `OEPlaceHydrogens` gave 60 warnings, 17 with this
+  rule); Probe's per-element radii and overlap allowance (adds a second
+  radius set to a check built on Bondi radii).
 
 ## Architecture
 
@@ -306,6 +317,7 @@ struct ClashOptions {
     double warning_overlap = 0.4;        // Å
     double error_overlap = 1.0;          // Å
     double polar_contact_distance = 2.9; // Å
+    double hbond_contact_distance = 1.9; // Å
 };
 
 class BondLengthAssessment : public Assessment {
@@ -344,8 +356,8 @@ options structs, with identical fields for now, so either can gain fields
 later without affecting the other.
 
 Constructors validate options and throw `std::invalid_argument` when any
-field is NaN, infinite, or negative, when `polar_contact_distance` is zero,
-or when an ERROR threshold is less than its WARNING threshold. Equal
+field is NaN, infinite, or negative, when `polar_contact_distance` or
+`hbond_contact_distance` is zero, or when an ERROR threshold is less than its WARNING threshold. Equal
 thresholds are allowed. When a value meets both thresholds, ERROR takes
 precedence.
 
@@ -459,26 +471,30 @@ Disulfide terms: for each pair of CYS residues whose SG atoms are within
 ### `clashes`: `ClashAssessment`
 
 - Options: `warning_overlap = 0.4`, `error_overlap = 1.0`,
-  `polar_contact_distance = 2.9` (all in Å).
+  `polar_contact_distance = 2.9`, `hbond_contact_distance = 1.9` (all in Å).
 - Scope: every atom in the molecule, including ligands and waters, except
   atoms with atomic number 0 and atoms for which `OEIsMetal` is true.
 - Each pair has a contact distance: the sum of the two atoms' radii from
   `OEGetBondiVdWRadius`, except that pairs where both atoms are N or O
-  (possible hydrogen bonds) use `polar_contact_distance`. Overlap = contact
-  distance − d.
+  use `polar_contact_distance`, and pairs of a polar hydrogen (atomic
+  number 1, bonded to at least one N or O) and an N or O use
+  `hbond_contact_distance`. The N/O rule takes precedence. Overlap =
+  contact distance − d.
 - Excluded pairs: atoms within three bonds of each other (1-2, 1-3, 1-4),
   using the molecule's bonds.
 - Candidate pairs come from `OEChem::OENearestNbrs` with cutoff
-  max(2 × largest radius among in-scope atoms, `polar_contact_distance`) −
-  `warning_overlap` + 0.01 Å. The 0.01 Å margin keeps pairs exactly at the
-  warning threshold in the candidate set whether or not `OENearestNbrs`
-  treats its cutoff as inclusive; the overlap test below decides which
-  candidates are findings.
+  max(2 × largest radius among in-scope atoms, `polar_contact_distance`,
+  `hbond_contact_distance`) − `warning_overlap` + 0.01 Å. The 0.01 Å
+  margin keeps pairs exactly at the warning threshold in the candidate set
+  whether or not `OENearestNbrs` treats its cutoff as inclusive; the
+  overlap test below decides which candidates are findings.
 - Overlap ≥ `warning_overlap` gives a WARNING finding, ≥ `error_overlap` an
   ERROR finding, code `clash`: two atoms; `observed` = d; `expected` =
   contact distance; `deviation` = overlap; no details. With the defaults, a
   polar pair is flagged at 2.5 Å or closer (WARNING) and at 1.9 Å or closer
-  (ERROR); an N–O pair at 2.8 Å is not flagged.
+  (ERROR); an N–O pair at 2.8 Å is not flagged. A polar hydrogen and an N
+  or O are flagged at 1.5 Å or closer (WARNING) and at 0.9 Å or closer
+  (ERROR).
 - Metrics, in order: `n_clashes` (findings of either severity),
   `clashscore` (`n_clashes` × 1000 / number of in-scope atoms),
   `max_overlap` (largest overlap among findings, 0 when there are none),
@@ -657,7 +673,8 @@ Framework:
 - `Run` throws `std::invalid_argument` for a 2D molecule with atoms, and an
   empty molecule gives NOT_APPLICABLE from every assessment.
 - Options validation: NaN, infinite, negative, and reversed thresholds
-  throw, as does a zero `polar_contact_distance`; equal thresholds are
+  throw, as does a zero `polar_contact_distance` or
+  `hbond_contact_distance`; equal thresholds are
   accepted, and a value at the shared threshold is reported as ERROR;
   default-constructed assessments report the documented defaults through
   `GetOptions()`.

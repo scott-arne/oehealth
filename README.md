@@ -135,10 +135,12 @@ thresholds (`BondLengthOptions`, `BondAngleOptions`, `ClashOptions`).
 Molecules are assessed as given: nothing is added or changed. The valence check
 needs implicit hydrogen counts, which OpenEye's readers assign by default.
 
-The clash check treats explicit hydrogens as ordinary atoms: a polar hydrogen
-and its hydrogen-bond acceptor use Bondi radii, not `polar_contact_distance`, so
-ordinary hydrogen bonds are reported as clashes. Crambin gives no clashes
-without hydrogens and 60 warnings after `OEPlaceHydrogens`.
+The clash check treats a hydrogen bonded to N or O and an N or O atom as a
+hydrogen-bond pair: it uses `hbond_contact_distance` (1.9 angstroms) instead of
+Bondi radii, so ordinary hydrogen bonds are not reported as clashes. Crambin
+gives no clashes without hydrogens and 17 warnings after `OEPlaceHydrogens`
+(12 involve a nonpolar hydrogen, 5 are hydrogen-hydrogen pairs, none involve a
+polar hydrogen and an N or O); before this rule it gave 60.
 
 The `OEGraphMol` object passes directly from Python to C++ via cross-runtime
 SWIG typemaps. No SMILES round-trip or manual pointer handling is needed.

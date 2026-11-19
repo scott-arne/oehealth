@@ -3,6 +3,8 @@
 #include "oehealth/assessments/clashes.h"
 #include "test_helpers.h"
 
+#include <oebio.h>
+
 #include <limits>
 #include <stdexcept>
 
@@ -18,6 +20,43 @@ AssessmentResult assess_pair(unsigned int first, unsigned int second, double sep
     return ClashAssessment().Run(mol);
 }
 
+// A hydrogen bonded to N or O.
+bool is_polar_hydrogen(const OEChem::OEAtomBase* atom) {
+    if (atom->GetAtomicNum() != OEChem::OEElemNo::H) {
+        return false;
+    }
+    for (OESystem::OEIter<OEChem::OEAtomBase> nbr = atom->GetAtoms(); nbr; ++nbr) {
+        if (nbr->GetAtomicNum() == OEChem::OEElemNo::N ||
+            nbr->GetAtomicNum() == OEChem::OEElemNo::O) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool is_nitrogen_or_oxygen(const OEChem::OEAtomBase* atom) {
+    return atom->GetAtomicNum() == OEChem::OEElemNo::N ||
+           atom->GetAtomicNum() == OEChem::OEElemNo::O;
+}
+
+// Heavy atom, polar hydrogen, bonded to it, and a third atom on the x axis.
+struct HydrogenLayout {
+    OEChem::OEGraphMol mol;
+    OEChem::OEAtomBase* donor;
+    OEChem::OEAtomBase* hydrogen;
+    OEChem::OEAtomBase* acceptor;
+};
+
+void build_layout(HydrogenLayout& layout, unsigned int donor_element, double hydrogen_x,
+                  double acceptor_x) {
+    layout.donor = add_atom(layout.mol, donor_element, "D", "LIG", 1, 0.0, 0.0, 0.0);
+    layout.hydrogen =
+        add_atom(layout.mol, OEChem::OEElemNo::H, "H", "LIG", 1, hydrogen_x, 0.0, 0.0);
+    layout.acceptor =
+        add_atom(layout.mol, OEChem::OEElemNo::O, "O", "LIG", 2, acceptor_x, 0.0, 0.0);
+    layout.mol.NewBond(layout.donor, layout.hydrogen, 1);
+}
+
 } // namespace
 
 TEST(ClashAssessment, DefaultsAndName) {
@@ -27,6 +66,7 @@ TEST(ClashAssessment, DefaultsAndName) {
     EXPECT_DOUBLE_EQ(assessment.GetOptions().warning_overlap, 0.4);
     EXPECT_DOUBLE_EQ(assessment.GetOptions().error_overlap, 1.0);
     EXPECT_DOUBLE_EQ(assessment.GetOptions().polar_contact_distance, 2.9);
+    EXPECT_DOUBLE_EQ(assessment.GetOptions().hbond_contact_distance, 1.9);
 }
 
 TEST(ClashAssessment, RejectsInvalidOptions) {
@@ -39,6 +79,9 @@ TEST(ClashAssessment, RejectsInvalidOptions) {
     EXPECT_THROW(ClashAssessment(ClashOptions{0.4, 1.0, 0.0}), std::invalid_argument);
     EXPECT_THROW(ClashAssessment(ClashOptions{0.4, 1.0, -2.9}), std::invalid_argument);
     EXPECT_THROW(ClashAssessment(ClashOptions{0.4, 1.0, nan}), std::invalid_argument);
+    EXPECT_THROW(ClashAssessment(ClashOptions{0.4, 1.0, 2.9, 0.0}), std::invalid_argument);
+    EXPECT_THROW(ClashAssessment(ClashOptions{0.4, 1.0, 2.9, -1.9}), std::invalid_argument);
+    EXPECT_THROW(ClashAssessment(ClashOptions{0.4, 1.0, 2.9, nan}), std::invalid_argument);
     EXPECT_NO_THROW(ClashAssessment(ClashOptions{0.4, 0.4, 2.9}));
 }
 
@@ -88,6 +131,58 @@ TEST(ClashAssessment, PolarPairsUsePolarContactDistance) {
     EXPECT_EQ(close.findings[0].severity, Severity::WARNING);
     EXPECT_NEAR(close.findings[0].expected, 2.9, 1e-9);
     EXPECT_NEAR(close.findings[0].deviation, 0.5, 1e-6);
+}
+
+TEST(ClashAssessment, PolarHydrogenAndAcceptorAtHydrogenBondDistanceIsNotAClash) {
+    HydrogenLayout layout;
+    build_layout(layout, OEChem::OEElemNo::N, 1.0, 2.8);
+    const AssessmentResult result = ClashAssessment().Run(layout.mol);
+    EXPECT_TRUE(result.findings.empty());
+}
+
+TEST(ClashAssessment, TooClosePolarHydrogenWarnsAgainstHydrogenBondContactDistance) {
+    HydrogenLayout layout;
+    build_layout(layout, OEChem::OEElemNo::N, 1.0, 2.4);
+    const AssessmentResult result = ClashAssessment().Run(layout.mol);
+    const Finding* found = nullptr;
+    for (const Finding& finding : result.findings) {
+        if (mentions_atom(finding, layout.hydrogen) && mentions_atom(finding, layout.acceptor)) {
+            found = &finding;
+        }
+    }
+    ASSERT_NE(found, nullptr);
+    EXPECT_EQ(found->severity, Severity::WARNING);
+    EXPECT_NEAR(found->expected, 1.9, 1e-9);
+    EXPECT_NEAR(found->deviation, 0.5, 1e-6);
+}
+
+TEST(ClashAssessment, NonpolarHydrogenKeepsBondiRadii) {
+    HydrogenLayout layout;
+    build_layout(layout, OEChem::OEElemNo::C, 1.09, 3.29);
+    const AssessmentResult result = ClashAssessment().Run(layout.mol);
+    ASSERT_EQ(result.findings.size(), 1U);
+    const Finding& clash = result.findings[0];
+    EXPECT_TRUE(mentions_atom(clash, layout.hydrogen));
+    EXPECT_TRUE(mentions_atom(clash, layout.acceptor));
+    EXPECT_EQ(clash.severity, Severity::WARNING);
+    EXPECT_NEAR(clash.expected, 2.72, 1e-6);
+}
+
+TEST(ClashAssessment, CrambinWithHydrogensDoesNotFlagHydrogenBonds) {
+    OEChem::OEGraphMol mol;
+    read_crambin(mol);
+    ASSERT_TRUE(OEBio::OEPlaceHydrogens(mol));
+    const AssessmentResult result = ClashAssessment().Run(mol);
+    EXPECT_EQ(metric(result, "hydrogens_present"), 1.0);
+
+    for (const Finding& finding : result.findings) {
+        EXPECT_NE(finding.severity, Severity::ERROR) << finding.message;
+        const OEChem::OEAtomBase* a = mol.GetAtom(OEChem::OEHasAtomIdx(finding.atoms[0].atom_idx));
+        const OEChem::OEAtomBase* b = mol.GetAtom(OEChem::OEHasAtomIdx(finding.atoms[1].atom_idx));
+        const bool hydrogen_bond_pair = (is_polar_hydrogen(a) && is_nitrogen_or_oxygen(b)) ||
+                                        (is_polar_hydrogen(b) && is_nitrogen_or_oxygen(a));
+        EXPECT_FALSE(hydrogen_bond_pair) << finding.message;
+    }
 }
 
 TEST(ClashAssessment, MetalsAreExcluded) {
