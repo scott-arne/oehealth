@@ -9,7 +9,9 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(googletest)
 
 add_executable(oehealth_tests
+    test_context.cpp
     test_oehealth.cpp
+    test_result.cpp
 )
 
 # Tests reach private headers under src/ (reference tables, variant

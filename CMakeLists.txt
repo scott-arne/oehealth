@@ -60,7 +60,12 @@ FetchContent_MakeAvailable(nlohmann_json)
 
 # Library
 set(OEHEALTH_SOURCES
+    src/assessment.cpp
+    src/common.cpp
+    src/context.cpp
+    src/geometry/measure.cpp
     src/oehealth.cpp
+    src/result.cpp
 )
 
 add_library(oehealth ${OEHEALTH_SOURCES})
