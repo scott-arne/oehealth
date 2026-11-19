@@ -36,6 +36,10 @@ private:
     std::vector<std::shared_ptr<Assessment>> children_;
 };
 
+/// \brief The protein geometry suite: bond lengths, bond angles, clashes,
+/// valence, and Ramachandran, each with default options.
+std::shared_ptr<AssessmentSuite> make_protein_geometry_suite();
+
 } // namespace OEHEALTH
 
 #endif // OEHEALTH_SUITE_H

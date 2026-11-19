@@ -1,5 +1,11 @@
 #include "oehealth/suite.h"
 
+#include "oehealth/assessments/bond_angles.h"
+#include "oehealth/assessments/bond_lengths.h"
+#include "oehealth/assessments/clashes.h"
+#include "oehealth/assessments/ramachandran.h"
+#include "oehealth/assessments/valence.h"
+
 #include <exception>
 #include <stdexcept>
 #include <utility>
@@ -52,6 +58,18 @@ AssessmentResult AssessmentSuite::Assess(const StructureContext& ctx) const {
         result.message = "no assessment in the suite applied";
     }
     return result;
+}
+
+std::shared_ptr<AssessmentSuite> make_protein_geometry_suite() {
+    std::vector<std::shared_ptr<Assessment>> children = {
+        std::make_shared<BondLengthAssessment>(),   std::make_shared<BondAngleAssessment>(),
+        std::make_shared<ClashAssessment>(),        std::make_shared<ValenceAssessment>(),
+        std::make_shared<RamachandranAssessment>(),
+    };
+    return std::make_shared<AssessmentSuite>("protein_geometry",
+                                             "Bond lengths, bond angles, clashes, valence, and "
+                                             "Ramachandran checks for protein structures.",
+                                             std::move(children));
 }
 
 } // namespace OEHEALTH
