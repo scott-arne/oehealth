@@ -30,12 +30,11 @@ const std::vector<std::shared_ptr<Assessment>>& AssessmentSuite::GetChildren() c
 AssessmentResult AssessmentSuite::Assess(const StructureContext& ctx) const {
     AssessmentResult result;
     result.assessment = name_;
+    result.status = Status::NOT_APPLICABLE;
     if (children_.empty()) {
-        result.status = Status::NOT_APPLICABLE;
         result.message = "the suite has no assessments";
         return result;
     }
-    result.status = Status::NOT_APPLICABLE;
     for (const auto& child : children_) {
         AssessmentResult child_result;
         try {
@@ -48,6 +47,9 @@ AssessmentResult AssessmentSuite::Assess(const StructureContext& ctx) const {
         }
         result.status = worst_status(result.status, child_result.status);
         result.children.push_back(std::move(child_result));
+    }
+    if (result.status == Status::NOT_APPLICABLE) {
+        result.message = "no assessment in the suite applied";
     }
     return result;
 }

@@ -114,6 +114,16 @@ TEST(AssessmentSuite, EmptySuiteIsNotApplicable) {
     EXPECT_TRUE(result.children.empty());
 }
 
+TEST(AssessmentSuite, AllNotApplicableChildrenGiveAMessage) {
+    const AssessmentSuite suite("s", "",
+                                {std::make_shared<FixedAssessment>("a", Status::NOT_APPLICABLE),
+                                 std::make_shared<FixedAssessment>("b", Status::NOT_APPLICABLE)});
+    const AssessmentResult result = assess(suite);
+    EXPECT_EQ(result.status, Status::NOT_APPLICABLE);
+    EXPECT_FALSE(result.message.empty());
+    ASSERT_EQ(result.children.size(), 2U);
+}
+
 TEST(AssessmentSuite, SuitesNest) {
     auto inner = std::make_shared<AssessmentSuite>(
         "inner", "",
