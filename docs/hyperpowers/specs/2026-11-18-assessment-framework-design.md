@@ -130,6 +130,22 @@ Out of scope for this round:
   bond; crambin after `OEPlaceHydrogens` gave 60 warnings, 17 with this
   rule); Probe's per-element radii and overlap allowance (adds a second
   radius set to a check built on Bondi radii).
+- **Public headers guard against the Windows `ERROR` macro themselves.**
+  On MSVC, OpenEye's `oetime.h` includes `winsock.h`, which brings in
+  `wingdi.h` and its `#define ERROR 0`, breaking `Severity::ERROR` and
+  `Status::ERROR`. `result.h` saves the macro with `#pragma push_macro`,
+  removes it around the enums, and restores it, and `NOGDI` is defined
+  privately on the library, the SWIG module, and the tests. Rejected:
+  renaming the enumerators (breaks the documented API and the JSON
+  strings); a public `NOGDI` (removes GDI from every downstream target that
+  links oehealth).
+- **Python reads result fields and options by value.** SWIG's `naturalvar`
+  feature makes member access return copies, and `OEHEALTH_RETURN_COPY`
+  makes `GetOptions()` return a copy, so a value taken from a temporary
+  result or assessment stays valid after Python collects the temporary.
+  Every new assessment with an options struct adds its own
+  `OEHEALTH_RETURN_COPY` line. Rejected: returning references (a reference
+  into a collected temporary dangles and crashes).
 
 ## Architecture
 

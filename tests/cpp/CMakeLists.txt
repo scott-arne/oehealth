@@ -12,6 +12,7 @@ add_executable(oehealth_tests
     test_assessments_geometry.cpp
     test_clashes.cpp
     test_context.cpp
+    test_error_macro.cpp
     test_json.cpp
     test_protein_suite.cpp
     test_ramachandran.cpp
@@ -33,6 +34,7 @@ target_include_directories(oehealth_tests
 target_compile_definitions(oehealth_tests
     PRIVATE
         OEHEALTH_TEST_DATA_DIR="${PROJECT_SOURCE_DIR}/tests/data"
+        $<$<PLATFORM_ID:Windows>:NOGDI>
 )
 
 target_link_libraries(oehealth_tests

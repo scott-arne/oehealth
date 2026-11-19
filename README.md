@@ -142,6 +142,12 @@ gives no clashes without hydrogens and 17 warnings after `OEPlaceHydrogens`
 (12 involve a nonpolar hydrogen, 5 are hydrogen-hydrogen pairs, none involve a
 polar hydrogen and an N or O); before this rule it gave 60.
 
+On Windows, OpenEye's headers pull in `windows.h`, which defines an `ERROR`
+macro. oehealth's headers protect themselves from it, so including them is safe
+in any order. C++ code that itself names `OEHEALTH::Status::ERROR` or
+`OEHEALTH::Severity::ERROR` after including `windows.h` must define `NOGDI` or
+`#undef ERROR` first. Python users are unaffected.
+
 The `OEGraphMol` object passes directly from Python to C++ via cross-runtime
 SWIG typemaps. No SMILES round-trip or manual pointer handling is needed.
 

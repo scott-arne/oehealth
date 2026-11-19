@@ -7,6 +7,12 @@
 
 namespace OEHEALTH {
 
+// windows.h, reached through OpenEye's oetime.h, defines ERROR. Save and remove
+// it around the enums so this header compiles regardless of include order, then
+// restore it so including the header never changes the caller's macros.
+#pragma push_macro("ERROR")
+#undef ERROR
+
 /// \brief How serious a single finding is.
 enum class Severity { INFO, WARNING, ERROR };
 
@@ -15,6 +21,8 @@ enum class Severity { INFO, WARNING, ERROR };
 /// ERROR is reserved for a suite child that threw; it is never derived from
 /// findings.
 enum class Status { NOT_APPLICABLE, PASS, WARN, FAIL, ERROR };
+
+#pragma pop_macro("ERROR")
 
 /// \brief Identifies an atom by copied values, so results outlive the molecule.
 struct AtomRef {

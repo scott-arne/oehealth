@@ -101,9 +101,10 @@ target_link_libraries(oehealth
 )
 
 # OpenEye pulls in windows.h, whose wingdi.h defines an ERROR macro that breaks
-# Severity::ERROR and Status::ERROR; NOGDI suppresses it. PUBLIC so the SWIG
-# module and the tests inherit it.
-target_compile_definitions(oehealth PUBLIC $<$<PLATFORM_ID:Windows>:NOGDI>)
+# Severity::ERROR and Status::ERROR where our own .cpp files name them after
+# OpenEye's headers. NOGDI is PRIVATE so downstream targets keep GDI; result.h
+# protects itself from the macro.
+target_compile_definitions(oehealth PRIVATE $<$<PLATFORM_ID:Windows>:NOGDI>)
 
 # Tests
 if(OEHEALTH_BUILD_TESTS)
