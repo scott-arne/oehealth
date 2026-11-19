@@ -12,6 +12,7 @@ add_executable(oehealth_tests
     test_assessments_geometry.cpp
     test_clashes.cpp
     test_context.cpp
+    test_json.cpp
     test_oehealth.cpp
     test_ramachandran.cpp
     test_reference_data.cpp
