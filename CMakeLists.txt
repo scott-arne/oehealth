@@ -65,6 +65,7 @@ set(OEHEALTH_SOURCES
     src/assessments/bond_lengths.cpp
     src/assessments/clashes.cpp
     src/assessments/geometry_outliers.cpp
+    src/assessments/ramachandran.cpp
     src/assessments/valence.cpp
     src/common.cpp
     src/context.cpp
