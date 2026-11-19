@@ -84,11 +84,12 @@ class TestOptions:
         assert returned.error_z == pytest.approx(6.0)
 
     def test_get_options_returns_an_owning_copy(self):
-        options = oehealth.ClashAssessment().GetOptions()
+        assessment = oehealth.ClashAssessment()
+        options = assessment.GetOptions()
         assert options.this.own()
         # Mutating the copy must not change the assessment that produced it.
         options.warning_overlap = 0.9
-        assert oehealth.ClashAssessment().GetOptions().warning_overlap == pytest.approx(0.4)
+        assert assessment.GetOptions().warning_overlap == pytest.approx(0.4)
 
     def test_invalid_options_raise_value_error(self):
         options = oehealth.ClashOptions()

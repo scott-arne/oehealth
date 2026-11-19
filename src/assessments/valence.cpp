@@ -9,9 +9,10 @@ namespace OEHEALTH {
 namespace {
 
 /// OEChem's valence model covers only these elements. OECheckAtomValence
-/// accepts every other element unchecked (it returns true) after printing an
-/// "Unknown element in TypeCheck" warning through OEThrow, so skipping them
-/// changes no result and keeps metalloproteins from filling stderr.
+/// accepts every other element unchecked (it returns true); all but atomic
+/// number 0 also print an "Unknown element in TypeCheck" warning through
+/// OEThrow, so skipping them changes no result and keeps metalloproteins from
+/// filling stderr.
 bool has_valence_model(unsigned int atomic_num) {
     using namespace OEChem::OEElemNo;
     switch (atomic_num) {

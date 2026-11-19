@@ -38,8 +38,10 @@ AssessmentResult RamachandranAssessment::Assess(const StructureContext& ctx) con
         if (alpha == nullptr) {
             continue;
         }
-        // The (mol, residue) constructor gives the same results but scans the whole
-        // molecule on every call, which made large structures quadratic.
+        // The (mol, residue) constructor agrees for structures without alternate locations
+        // but scans the whole molecule on every call, which made large structures quadratic.
+        // A residue with alternate CA atoms is classified from its first CA, as the bond and
+        // angle checks use the first atom of each name; the old constructor skipped it.
         const OEBio::OERamachandranAnalysis analysis(alpha);
         const unsigned int category = analysis.GetRamaCategory();
         if (category == OEBio::OERamaCategory::Favored) {

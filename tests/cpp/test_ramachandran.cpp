@@ -5,6 +5,8 @@
 
 #include <oebio.h>
 
+#include <array>
+
 namespace OEHEALTH::test {
 
 TEST(RamachandranAssessment, Name) {
@@ -54,6 +56,37 @@ TEST(RamachandranAssessment, CrambinMatchesWwpdbReport) {
     EXPECT_DOUBLE_EQ(metric(result, "pct_favored"),
                      100.0 * favored / (favored + allowed + outliers));
     EXPECT_EQ(metric(result, "pct_outliers"), 0.0);
+}
+
+TEST(RamachandranAssessment, ResidueWithAlternateCaIsClassifiedFromItsFirstCa) {
+    OEChem::OEGraphMol plain;
+    read_crambin(plain);
+    const AssessmentResult baseline = RamachandranAssessment().Run(plain);
+
+    OEChem::OEGraphMol mol;
+    read_crambin(mol);
+    OEChem::OEAtomBase* ca = find_atom(mol, 20, "CA");
+    ASSERT_NE(ca, nullptr);
+    // This builds the alternate in memory; OEBio's (mol, residue) constructor still classifies
+    // the residue here, so the test pins the new behavior and not the old Unknown result.
+    // The new atom comes after the original in index order, so the original stays the first CA.
+    OEChem::OEResidue alternate = OEChem::OEAtomGetResidue(ca);
+    OEChem::OEResidue original = alternate;
+    original.SetAlternateLocation('A');
+    alternate.SetAlternateLocation('B');
+    OEChem::OEAtomSetResidue(ca, original);
+    const std::array<double, 3> xyz = coords(mol, ca);
+    OEChem::OEAtomBase* second =
+        add_atom(mol, OEChem::OEElemNo::C, "CA", "", 20, xyz[0] + 0.3, xyz[1], xyz[2]);
+    OEChem::OEAtomSetResidue(second, alternate);
+    mol.NewBond(second, find_atom(mol, 20, "N"), 1);
+    mol.NewBond(second, find_atom(mol, 20, "C"), 1);
+
+    const AssessmentResult result = RamachandranAssessment().Run(mol);
+    EXPECT_EQ(metric(result, "n_assessed"), metric(baseline, "n_assessed"));
+    EXPECT_EQ(metric(result, "n_favored"), metric(baseline, "n_favored"));
+    EXPECT_EQ(metric(result, "n_allowed"), metric(baseline, "n_allowed"));
+    EXPECT_EQ(metric(result, "n_outliers"), metric(baseline, "n_outliers"));
 }
 
 TEST(RamachandranAssessment, DisallowedTorsionsGiveOneOutlier) {

@@ -533,10 +533,11 @@ Disulfide terms: for each pair of CYS residues whose SG atoms are within
 - No options.
 - Runs `OEChem::OECheckAtomValence` on every atom whose element OEChem's
   valence model covers (H, B, C, N, O, F, Si, P, S, Cl, Se, Br, I). Other
-  elements, including metals, noble gases, and atomic number 0, are
-  skipped: OEChem accepts them unchecked (returns true) and prints an
-  "Unknown element in TypeCheck" warning through OEThrow, so skipping
-  changes no result and keeps the warning off stderr. Each failure is an ERROR
+  elements, including metals and noble gases, are skipped: OEChem
+  accepts them unchecked (returns true) and prints an "Unknown element in
+  TypeCheck" warning through OEThrow, so skipping changes no result and
+  keeps the warning off stderr. Atomic number 0 is also accepted, but
+  silently. Each failure is an ERROR
   finding, code `invalid_valence`: one atom; `observed` = the atom's
   valence (`GetValence()`, which includes implicit hydrogens); `expected`
   and `deviation` NaN; `details` = `formal_charge`, `implicit_h_count`,
@@ -552,10 +553,14 @@ Disulfide terms: for each pair of CYS residues whose SG atoms are within
 - No options; categories come from OEBio.
 - For each standard amino-acid residue, constructs
   `OEBio::OERamachandranAnalysis(atom)` from its CA atom. The
-  `(mol, residue)` constructor gives identical results (checked on crambin,
-  with a chain break, and with offset and gapped residue numbering) but scans
-  the whole molecule per call, so it is quadratic: 22 s against 0.1 s at
-  20,000 residues. Residues with no CA, or whose category is `OERamaCategory::Unknown`
+  `(mol, residue)` constructor agrees for structures without alternate
+  locations (checked on crambin, with a chain break, and with offset and
+  gapped residue numbering) but scans the whole molecule per call, so it is
+  quadratic: 22 s against 0.1 s at 20,000 residues. A residue with alternate
+  CA atoms (a structure read with `OEIFlavor::PDB::ALTLOC`) is classified
+  from its first CA, as the bond and angle checks use the first atom of each
+  name (`ResidueInfo::FindAtom`); the `(mol, residue)` constructor left such a
+  residue Unknown. Residues with no CA, or whose category is `OERamaCategory::Unknown`
   (termini and breaks), are not assessed.
 - Each Outlier is a WARNING finding, code `ramachandran_outlier`: the
   residue's N, CA, and C atoms (those present); `observed` = the OEBio
@@ -745,6 +750,13 @@ Reference data:
   `standard_geometry.cif` committed under `tests/data/` and checks the
   emitted rows, the "NOT PRO GLY" alias, the dropped PRO C–N–CD rows, and
   the error on an unknown link id.
+- The committed table records the SHA-256 of its source, and a test checks
+  that the line is present. A second pytest test regenerates the table from
+  the full `standard_geometry.cif` (copied under that name, since the
+  generator writes the file name into its header) and compares bytes. It
+  finds the file through `OEHEALTH_STANDARD_GEOMETRY_CIF` or
+  `$CCP4/lib/data`, skips when neither provides one or when the checksum
+  differs, and fails when the variable names a missing file.
 
 Assessments:
 
@@ -761,10 +773,29 @@ Assessments:
 - `valence`: a five-coordinate carbon gives one `invalid_valence` finding;
   crambin as read gives none; crambin with implicit hydrogen counts zeroed
   gives findings (documents the requirement).
+- `valence` silence: zinc and xenon atoms give no finding and write nothing
+  through OEThrow. Table test: a single bare atom with zero implicit
+  hydrogens for each atomic number 1 to 118 gives exactly one finding for the
+  13 modeled elements and none for any other, with nothing written through
+  OEThrow.
 - `ramachandran`: crambin gives 44 assessed residues (termini excluded) and
   no outliers, matching the wwPDB validation report for 1CRN; setting one
   residue's phi and psi into a disallowed region with `OESetTorsion` gives
-  one outlier at that residue, with phi and psi in degrees.
+  one outlier at that residue, with phi and psi in degrees. The favored,
+  allowed, and outlier counts are checked independently against OEBio's
+  `(mol, residue)` constructor. A crambin residue given a second CA atom
+  (alternate location B, the original marked A, 0.3 A away) is still
+  assessed with the same counts, classified from its first CA; the test
+  documents the behavior, since OEBio's `(mol, residue)` constructor also
+  classifies this in-memory case.
+- `clashes` with hydrogens: crambin after `OEPlaceHydrogens` gives no ERROR
+  and no polar-hydrogen and N or O pair; a hydrogen-bond-distance pair of
+  such atoms gives none, using `hbond_contact_distance`.
+- Disulfide sweep: an SG atom with a NaN coordinate is skipped, and a normal
+  CYS pair elsewhere is still found.
+- `tests/cpp/test_error_macro.cpp` defines `ERROR` as the Windows headers do
+  before including `oehealth/result.h` and checks that the header restores the
+  macro and that `Severity::ERROR` and `Status::ERROR` remain usable.
 - JSON: output parses back; keys and metric order match the schema; NaN
   becomes `null`; duplicate metric names throw; child objects omit the
   version keys.
@@ -772,7 +803,11 @@ Assessments:
 Python tests (pytest) cover the bindings: `Run` on crambin for each
 assessment, `to_dict()`, the protein geometry suite, constructing a custom
 suite from Python, setting options fields from Python, `ValueError` for 2D
-input and for invalid options, and `TypeError` for a non-molecule.
+input and for invalid options, and `TypeError` for a non-molecule. Ownership
+tests check that vector fields of a result are owning copies, that `GetOptions()` returns an owning copy (mutating it leaves the assessment's
+options unchanged), and that a suite's `GetChildren()` returns a tuple of
+owning proxies. `worst_status` is tested from Python: the later status wins,
+ERROR dominates, and NOT_APPLICABLE yields.
 
 ## Global Constraints
 

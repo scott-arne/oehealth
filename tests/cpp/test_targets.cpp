@@ -327,6 +327,21 @@ TEST(Targets, DisulfideTermsFollowResidueOrderNotCoordinateOrder) {
     EXPECT_EQ(pairs, expected);
 }
 
+TEST(Targets, DisulfideSweepSkipsNonFiniteCoordinates) {
+    // A NaN x would break the strict weak ordering of the x-sorted sweep.
+    OEChem::OEGraphMol mol;
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    add_atom(mol, OEChem::OEElemNo::S, "SG", "CYS", 1, nan, 0.0, 0.0);
+    add_atom(mol, OEChem::OEElemNo::S, "SG", "CYS", 2, 0.0, nan, 0.0);
+    add_atom(mol, OEChem::OEElemNo::S, "SG", "CYS", 3, 20.0, 0.0, 0.0);
+    add_atom(mol, OEChem::OEElemNo::S, "SG", "CYS", 4, 21.5, 0.0, 0.0);
+    const StructureContext ctx(mol);
+    EXPECT_EQ(geometry::residue_variant(ctx, 0), "SH");
+    EXPECT_EQ(geometry::residue_variant(ctx, 1), "SH");
+    EXPECT_EQ(geometry::residue_variant(ctx, 2), "SS");
+    EXPECT_EQ(geometry::residue_variant(ctx, 3), "SS");
+}
+
 TEST(Measure, TorsionOfPlanarTransIsPositive180) {
     // This zigzag made atan2 return -180.0 (y == -0.0, x < 0) before the result was normalized.
     OEChem::OEGraphMol mol;

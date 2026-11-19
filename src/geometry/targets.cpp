@@ -49,7 +49,12 @@ Disulfides find_disulfides(const StructureContext& ctx) {
             continue;
         }
         if (const OEChem::OEAtomBase* atom = residues[i].FindAtom("SG")) {
-            sulfurs.push_back({i, atom, coordinates(ctx.GetMolecule(), atom)[0]});
+            const auto xyz = coordinates(ctx.GetMolecule(), atom);
+            // A NaN x would break the strict weak ordering the sort needs. Such an atom could
+            // never pass the distance test anyway.
+            if (std::isfinite(xyz[0]) && std::isfinite(xyz[1]) && std::isfinite(xyz[2])) {
+                sulfurs.push_back({i, atom, xyz[0]});
+            }
         }
     }
     std::sort(sulfurs.begin(), sulfurs.end(),

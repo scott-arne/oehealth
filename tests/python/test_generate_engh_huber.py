@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -173,6 +174,9 @@ def find_full_source() -> Path | None:
     override = os.environ.get("OEHEALTH_STANDARD_GEOMETRY_CIF")
     if override:
         candidate = Path(override)
+        # An explicit setting that is wrong is a configuration error, not a reason to skip.
+        if not candidate.is_file():
+            pytest.fail(f"OEHEALTH_STANDARD_GEOMETRY_CIF names a missing file: {candidate}")
     elif os.environ.get("CCP4"):
         candidate = Path(os.environ["CCP4"]) / "lib" / "data" / "standard_geometry.cif"
     else:
@@ -196,7 +200,11 @@ def test_regeneration_reproduces_the_committed_table(tmp_path: Path) -> None:
             f"{source.name} has SHA-256 {actual}, but the committed table was generated "
             f"from {match.group(1)}; a different file proves nothing about this table"
         )
+    # The generator writes the source file name into its header, so a correct file under another
+    # name (for example a versioned copy) would otherwise differ from the committed table.
+    named_source = tmp_path / "standard_geometry.cif"
+    shutil.copyfile(source, named_source)
     output = tmp_path / "engh_huber_2001.cpp"
-    result = run_generator(source, output)
+    result = run_generator(named_source, output)
     assert result.returncode == 0, result.stderr
     assert output.read_bytes() == committed

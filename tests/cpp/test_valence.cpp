@@ -3,6 +3,8 @@
 #include "oehealth/assessments/valence.h"
 #include "test_helpers.h"
 
+#include <set>
+
 namespace OEHEALTH::test {
 
 namespace {
@@ -77,6 +79,24 @@ TEST(ValenceAssessment, ElementsOutsideTheValenceModelAreSkippedSilently) {
     const AssessmentResult result = ValenceAssessment().Run(mol);
     EXPECT_TRUE(result.findings.empty());
     EXPECT_EQ(result.status, Status::PASS);
+    EXPECT_EQ(capture.Text(), "");
+}
+
+TEST(ValenceAssessment, OnlyModeledElementsAreChecked) {
+    // A bare atom with no hydrogens is under-valent, so a finding means the element was checked.
+    // Checking every atomic number catches a modeled element dropped from the skip list.
+    using namespace OEChem::OEElemNo;
+    const std::set<unsigned int> modeled{H, B, C, N, O, F, Si, P, S, Cl, Se, Br, I};
+    ASSERT_EQ(modeled.size(), 13U);
+    ScopedOEThrowCapture capture;
+    for (unsigned int atomic_num = 1; atomic_num <= 118; ++atomic_num) {
+        OEChem::OEGraphMol mol;
+        OEChem::OEAtomBase* atom = add_atom(mol, atomic_num, "X", "UNK", 1, 0.0, 0.0, 0.0);
+        atom->SetImplicitHCount(0);
+        const AssessmentResult result = ValenceAssessment().Run(mol);
+        EXPECT_EQ(result.findings.size(), modeled.count(atomic_num) != 0 ? 1U : 0U)
+            << "atomic number " << atomic_num;
+    }
     EXPECT_EQ(capture.Text(), "");
 }
 

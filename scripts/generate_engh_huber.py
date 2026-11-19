@@ -378,7 +378,8 @@ def main(argv: list[str] | None = None) -> int:
     except GeneratorError as error:
         print(f"generate_engh_huber: {error}", file=sys.stderr)
         return 1
-    args.output.write_text(text, encoding="utf-8")
+    # Fixed LF endings keep the output byte-identical on Windows.
+    args.output.write_text(text, encoding="utf-8", newline="\n")
     return 0
 
 

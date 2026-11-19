@@ -139,8 +139,9 @@ The clash check treats a hydrogen bonded to N or O and an N or O atom as a
 hydrogen-bond pair: it uses `hbond_contact_distance` (1.9 angstroms) instead of
 Bondi radii, so ordinary hydrogen bonds are not reported as clashes. Crambin
 gives no clashes without hydrogens and 17 warnings after `OEPlaceHydrogens`
-(12 involve a nonpolar hydrogen, 5 are hydrogen-hydrogen pairs, none involve a
-polar hydrogen and an N or O); before this rule it gave 60.
+(5 are hydrogen-hydrogen pairs, 11 pair a nonpolar hydrogen with a heavy atom,
+and 1 pairs a polar hydrogen with a carbon, A ARG 10 CD-HH12 at 2.449 angstroms;
+none pair a polar hydrogen with an N or O); before this rule it gave 60.
 
 On Windows, OpenEye's headers pull in `windows.h`, which defines an `ERROR`
 macro. oehealth's headers protect themselves from it, so including them is safe
