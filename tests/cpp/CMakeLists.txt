@@ -14,6 +14,7 @@ add_executable(oehealth_tests
     test_reference_data.cpp
     test_result.cpp
     test_suite.cpp
+    test_targets.cpp
 )
 
 # Tests reach private headers under src/ (reference tables, variant

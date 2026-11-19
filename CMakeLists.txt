@@ -65,6 +65,7 @@ set(OEHEALTH_SOURCES
     src/context.cpp
     src/data/engh_huber_2001.cpp
     src/geometry/measure.cpp
+    src/geometry/targets.cpp
     src/oehealth.cpp
     src/result.cpp
     src/suite.cpp
