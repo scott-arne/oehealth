@@ -66,6 +66,7 @@ set(OEHEALTH_SOURCES
     src/geometry/measure.cpp
     src/oehealth.cpp
     src/result.cpp
+    src/suite.cpp
 )
 
 add_library(oehealth ${OEHEALTH_SOURCES})
