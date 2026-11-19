@@ -800,11 +800,11 @@ Assessments:
   residue's phi and psi into a disallowed region with `OESetTorsion` gives
   one outlier at that residue, with phi and psi in degrees. The favored,
   allowed, and outlier counts are checked independently against OEBio's
-  `(mol, residue)` constructor. A crambin residue given a second CA atom
-  (alternate location B, the original marked A, 0.3 A away) is still
-  assessed with the same counts, classified from its first CA; the test
-  documents the behavior, since OEBio's `(mol, residue)` constructor also
-  classifies this in-memory case.
+  `(mol, residue)` constructor. Crambin PDB text with A and B records for
+  one residue's CA (B 0.3 A from A), read with the ALTLOC flavor, makes
+  OEBio's `(mol, residue)` constructor return Unknown for that residue;
+  the assessment still assesses it from its first CA, with the same counts
+  as plain crambin.
 - `clashes` with hydrogens: crambin after `OEPlaceHydrogens` gives no ERROR
   and no polar-hydrogen and N or O pair; a hydrogen-bond-distance pair of
   such atoms gives none, using `hbond_contact_distance`.

@@ -6,8 +6,41 @@
 #include <oebio.h>
 
 #include <array>
+#include <cstdio>
+#include <fstream>
+#include <string>
 
 namespace OEHEALTH::test {
+
+namespace {
+
+/// Return crambin PDB text in which the CA of one residue has A and B alternate locations.
+std::string crambin_with_alternate_ca(int residue_number) {
+    std::ifstream file(std::string(OEHEALTH_TEST_DATA_DIR) + "/1crn.pdb");
+    std::string text;
+    std::string line;
+    while (std::getline(file, line)) {
+        const bool is_target = line.compare(0, 6, "ATOM  ") == 0 && line.size() >= 54 &&
+                               trimmed(line.substr(12, 4)) == "CA" &&
+                               std::stoi(line.substr(22, 4)) == residue_number;
+        if (!is_target) {
+            text.append(line).append("\n");
+            continue;
+        }
+        // Columns 31-38 hold x; the B conformer is shifted by 0.3 A along it.
+        std::string a_line = line;
+        a_line[16] = 'A';
+        std::string b_line = a_line;
+        b_line[16] = 'B';
+        std::array<char, 9> x{};
+        std::snprintf(x.data(), x.size(), "%8.3f", std::stod(line.substr(30, 8)) + 0.3);
+        b_line.replace(30, 8, x.data());
+        text.append(a_line).append("\n").append(b_line).append("\n");
+    }
+    return text;
+}
+
+} // namespace
 
 TEST(RamachandranAssessment, Name) {
     const RamachandranAssessment assessment;
@@ -58,31 +91,33 @@ TEST(RamachandranAssessment, CrambinMatchesWwpdbReport) {
     EXPECT_EQ(metric(result, "pct_outliers"), 0.0);
 }
 
-TEST(RamachandranAssessment, ResidueWithAlternateCaIsClassifiedFromItsFirstCa) {
+TEST(RamachandranAssessment, ResidueWithAlternateCaIsStillAssessed) {
     OEChem::OEGraphMol plain;
     read_crambin(plain);
     const AssessmentResult baseline = RamachandranAssessment().Run(plain);
 
+    // The alternate must come from PDB text read with the ALTLOC flavor: only then does OEBio's
+    // (mol, residue) constructor return Unknown for the residue, which is the case the atom
+    // constructor in the assessment is meant to handle.
     OEChem::OEGraphMol mol;
-    read_crambin(mol);
+    OEChem::oemolistream ifs;
+    ifs.SetFlavor(OEChem::OEFormat::PDB, OEChem::OEIFlavor::Generic::Default |
+                                             OEChem::OEIFlavor::PDB::Default |
+                                             OEChem::OEIFlavor::PDB::ALTLOC);
+    ifs.SetFormat(OEChem::OEFormat::PDB);
+    ASSERT_TRUE(ifs.openstring(crambin_with_alternate_ca(20)));
+    ASSERT_TRUE(OEChem::OEReadMolecule(ifs, mol));
+
     OEChem::OEAtomBase* ca = find_atom(mol, 20, "CA");
     ASSERT_NE(ca, nullptr);
-    // This builds the alternate in memory; OEBio's (mol, residue) constructor still classifies
-    // the residue here, so the test pins the new behavior and not the old Unknown result.
-    // The new atom comes after the original in index order, so the original stays the first CA.
-    OEChem::OEResidue alternate = OEChem::OEAtomGetResidue(ca);
-    OEChem::OEResidue original = alternate;
-    original.SetAlternateLocation('A');
-    alternate.SetAlternateLocation('B');
-    OEChem::OEAtomSetResidue(ca, original);
-    const std::array<double, 3> xyz = coords(mol, ca);
-    OEChem::OEAtomBase* second =
-        add_atom(mol, OEChem::OEElemNo::C, "CA", "", 20, xyz[0] + 0.3, xyz[1], xyz[2]);
-    OEChem::OEAtomSetResidue(second, alternate);
-    mol.NewBond(second, find_atom(mol, 20, "N"), 1);
-    mol.NewBond(second, find_atom(mol, 20, "C"), 1);
+    EXPECT_EQ(OEChem::OEAtomGetResidue(ca).GetAlternateLocation(), 'A');
+    EXPECT_EQ(OEBio::OERamachandranAnalysis(mol, OEChem::OEAtomGetResidue(ca)).GetRamaCategory(),
+              OEBio::OERamaCategory::Unknown);
+    const unsigned int first_ca_category = OEBio::OERamachandranAnalysis(ca).GetRamaCategory();
+    ASSERT_NE(first_ca_category, OEBio::OERamaCategory::Unknown);
 
     const AssessmentResult result = RamachandranAssessment().Run(mol);
+    EXPECT_EQ(metric(result, "n_assessed"), 44.0);
     EXPECT_EQ(metric(result, "n_assessed"), metric(baseline, "n_assessed"));
     EXPECT_EQ(metric(result, "n_favored"), metric(baseline, "n_favored"));
     EXPECT_EQ(metric(result, "n_allowed"), metric(baseline, "n_allowed"));
