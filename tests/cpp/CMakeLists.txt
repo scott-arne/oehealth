@@ -12,9 +12,23 @@ add_executable(oehealth_tests
     test_oehealth.cpp
 )
 
+# Tests reach private headers under src/ (reference tables, variant
+# selection, helpers) as well as the public API.
+target_include_directories(oehealth_tests
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+target_compile_definitions(oehealth_tests
+    PRIVATE
+        OEHEALTH_TEST_DATA_DIR="${PROJECT_SOURCE_DIR}/tests/data"
+)
+
 target_link_libraries(oehealth_tests
     PRIVATE
         oehealth
+        nlohmann_json::nlohmann_json
         GTest::gtest_main
 )
 

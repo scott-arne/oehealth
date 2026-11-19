@@ -64,7 +64,7 @@ rpath-strategy = "platform"  # "platform" = @loader_path/../openeye/libs/{platfo
 # (they are provided at runtime by openeye-toolkits, not bundled in the wheel)
 expected-missing-libs = [
     "liboechem", "liboesystem", "liboeplatform",
-    "liboemath", "libzstd",
+    "liboemath", "libzstd", "liboebio", "liboegrid",
 ]
 
 # Additional CMake defines passed during wheel build (beyond the standard ones)
@@ -87,3 +87,52 @@ exclude = [
     "**/*.egg-info",
 ]
 
+
+# =============================================================================
+# Ruff (lint) and mypy (type check)
+# =============================================================================
+# Both cover the package, the reference-table generator, and the Python tests.
+# The SWIG-generated module, the generated build info, and the shared
+# scripts/build_python.py are excluded.
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+include = [
+    "python/oehealth/**/*.py",
+    "scripts/generate_engh_huber.py",
+    "tests/python/**/*.py",
+]
+extend-exclude = [
+    "python/oehealth/oehealth.py",
+    "python/oehealth/_build_info.py",
+    "scripts/build_python.py",
+]
+force-exclude = true
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "RUF"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["oehealth"]
+
+[tool.ruff.lint.per-file-ignores]
+# The extension import must follow the runtime-library setup calls, and the
+# template's warnings keep their default stack level.
+"python/oehealth/__init__.py" = ["E402", "B028"]
+
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "python"
+files = ["python/oehealth", "tests/python"]
+exclude = ['^python/oehealth/oehealth\.py$', '^python/oehealth/_build_info\.py$']
+warn_unused_ignores = true
+warn_redundant_casts = true
+
+[[tool.mypy.overrides]]
+module = ["oehealth.oehealth", "oehealth._build_info", "openeye", "openeye.*"]
+ignore_missing_imports = true
+follow_imports = "skip"
+
+[[tool.mypy.overrides]]
+module = ["generate_engh_huber", "test_generate_engh_huber"]
+disallow_untyped_defs = true

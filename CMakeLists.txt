@@ -49,6 +49,15 @@ endif()
 
 find_package(OpenEye REQUIRED)
 
+# nlohmann/json is header-only and used only by src/json.cpp.
+FetchContent_Declare(
+    nlohmann_json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG v3.11.3
+    GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(nlohmann_json)
+
 # Library
 set(OEHEALTH_SOURCES
     src/oehealth.cpp
@@ -62,11 +71,19 @@ target_include_directories(oehealth
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
+# OERamachandranAnalysis lives in OEBio, which depends on OEGrid. The
+# BUILD_INTERFACE wrapper keeps the header-only json target out of the
+# installed export set.
 target_link_libraries(oehealth
     PUBLIC
+        OpenEye::OEBio
         OpenEye::OEChem
+    PRIVATE
+        $<BUILD_INTERFACE:nlohmann_json::nlohmann_json>
 )
 
 # Tests

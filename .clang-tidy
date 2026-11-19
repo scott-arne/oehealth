@@ -1,0 +1,22 @@
+---
+# bugprone, modernize, and performance checks, minus the ones that conflict
+# with project conventions:
+#   modernize-use-trailing-return-type  project style uses leading return types
+#   modernize-macro-to-enum             version macros are managed by vrzn
+#   modernize-use-nodiscard             not used in this codebase
+#   bugprone-easily-swappable-parameters  flags every (double, double) signature
+#   performance-enum-size               SWIG and JSON code expect plain int enums
+Checks: >
+  -*,
+  bugprone-*,
+  modernize-*,
+  performance-*,
+  -modernize-use-trailing-return-type,
+  -modernize-macro-to-enum,
+  -modernize-use-nodiscard,
+  -bugprone-easily-swappable-parameters,
+  -performance-enum-size
+WarningsAsErrors: ''
+HeaderFilterRegex: '.*/(include/oehealth|src|tests/cpp)/.*'
+FormatStyle: file
+...
