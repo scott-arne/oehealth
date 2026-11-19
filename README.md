@@ -90,11 +90,14 @@ Lint and format checks (clang-tidy needs the build's `compile_commands.json`;
 on macOS also pass `--extra-arg=-isysroot --extra-arg="$(xcrun --show-sdk-path)"`):
 
 ```bash
-clang-format --dry-run --Werror include/oehealth/*.h src/*.cpp
-clang-tidy -p build-debug src/*.cpp
+find include src tests/cpp -name '*.h' -o -name '*.cpp' | sort | xargs clang-format --dry-run --Werror
+find src tests/cpp -name '*.cpp' | sort | xargs clang-tidy -p build-debug --quiet
 ruff check .
-mypy
+mypy --python-executable <python with pytest and openeye installed>
 ```
+
+mypy needs `--python-executable` when it is installed apart from pytest and
+openeye, because it resolves their types from that interpreter.
 
 ## Usage
 
@@ -131,6 +134,11 @@ Each assessment can also run on its own, for example
 thresholds (`BondLengthOptions`, `BondAngleOptions`, `ClashOptions`).
 Molecules are assessed as given: nothing is added or changed. The valence check
 needs implicit hydrogen counts, which OpenEye's readers assign by default.
+
+The clash check treats explicit hydrogens as ordinary atoms: a polar hydrogen
+and its hydrogen-bond acceptor use Bondi radii, not `polar_contact_distance`, so
+ordinary hydrogen bonds are reported as clashes. Crambin gives no clashes
+without hydrogens and 60 warnings after `OEPlaceHydrogens`.
 
 The `OEGraphMol` object passes directly from Python to C++ via cross-runtime
 SWIG typemaps. No SMILES round-trip or manual pointer handling is needed.
@@ -186,10 +194,13 @@ under `include/oehealth/assessments/`, and include it from
 `src/common.h` (`make_atom_ref`, `atom_path`, `status_from_findings`).
 
 **3. Expose in SWIG** (`swig/oehealth.i`): add a `%shared_ptr(...)` line for the
-class next to the others, and `%include` its header.
+class next to the others, and `%include` its header. If the class has a
+`const XOptions& GetOptions() const`, also add `OEHEALTH_RETURN_COPY(OEHEALTH::XOptions)`
+next to the existing ones; otherwise Python gets a non-owning proxy that dangles
+once the assessment is collected.
 
 **4. Re-export in Python** (`python/oehealth/__init__.py`): add the class to the
-import list and `__all__`.
+import list and `__all__`, and re-export its options struct the same way.
 
 **5. Rebuild and test:**
 

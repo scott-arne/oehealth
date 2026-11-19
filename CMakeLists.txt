@@ -100,6 +100,11 @@ target_link_libraries(oehealth
         $<BUILD_INTERFACE:nlohmann_json::nlohmann_json>
 )
 
+# OpenEye pulls in windows.h, whose wingdi.h defines an ERROR macro that breaks
+# Severity::ERROR and Status::ERROR; NOGDI suppresses it. PUBLIC so the SWIG
+# module and the tests inherit it.
+target_compile_definitions(oehealth PUBLIC $<$<PLATFORM_ID:Windows>:NOGDI>)
+
 # Tests
 if(OEHEALTH_BUILD_TESTS)
     enable_testing()

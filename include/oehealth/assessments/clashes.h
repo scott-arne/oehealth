@@ -18,6 +18,11 @@ struct ClashOptions {
 /// when both atoms are N or O. Atoms within three bonds of each other,
 /// atoms with atomic number 0, and metals are excluded. The atoms are
 /// assessed as given; the result records whether hydrogens were present.
+///
+/// With explicit hydrogens, a polar hydrogen and its hydrogen-bond acceptor are
+/// compared by Bondi radii (1.20 + 1.52 angstroms), not polar_contact_distance,
+/// so ordinary hydrogen bonds are reported as clashes. Assess heavy-atom
+/// structures when that matters.
 class ClashAssessment : public Assessment {
 public:
     /// \throws std::invalid_argument for NaN, infinite, or negative values,

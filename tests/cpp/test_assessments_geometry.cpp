@@ -132,7 +132,8 @@ TEST(BondLengthAssessment, CrambinHasNoErrors) {
     EXPECT_EQ(result.metrics[1].name, "n_outliers");
     EXPECT_EQ(result.metrics[2].name, "rmsz");
     EXPECT_EQ(result.metrics[3].name, "max_abs_z");
-    EXPECT_GT(metric(result, "n_assessed"), 300.0);
+    // Pinned so that a regression dropping the SS and trans variant rows is caught.
+    EXPECT_EQ(metric(result, "n_assessed"), 337.0);
     EXPECT_EQ(metric(result, "n_outliers"), static_cast<double>(result.findings.size()));
 }
 
@@ -142,7 +143,8 @@ TEST(BondAngleAssessment, CrambinHasNoErrors) {
     const AssessmentResult result = BondAngleAssessment().Run(mol);
     EXPECT_EQ(result.assessment, "bond_angles");
     EXPECT_FALSE(has_error_finding(result));
-    EXPECT_GT(metric(result, "n_assessed"), 400.0);
+    // Pinned so that a regression dropping the SS and trans variant rows is caught.
+    EXPECT_EQ(metric(result, "n_assessed"), 458.0);
 }
 
 TEST(BondLengthAssessment, StretchedBondIsTheOnlyNewOutlier) {
